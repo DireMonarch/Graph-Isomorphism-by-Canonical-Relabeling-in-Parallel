@@ -1,5 +1,4 @@
 #include "pcanon.h"
-#include "pathnode.h"
 
 #define __DEBUG__ FALSE
 
@@ -10,12 +9,25 @@
 static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int cell_sz, partition *alpha, int scope_idx, int scope_sz, int m, int n);
 static int _target_cell(partition *pi);
 
-/**
- * Pretty sure we're going to need a "starting point" in here as well
- */
-void run(graph *g){
+void run(graph *g, int m, int n){
+    partition *pi = generate_unit_partition(n);
+    partition *active = generate_unit_partition(n);
 
+
+    PathNode *curr, *next1, *next2;
+    DYNALLOCPATHNODE(curr, "main");
+
+    curr->pi = refine(g, pi, active, m, n);
+    visualize_partition(DEBUGFILE, curr->pi); putc('\n', DEBUGFILE);
+    
+    next1 = process(g, m, n, curr);
+    next2 = process(g, m, n, next1);
+
+
+    if (next2 != NULL)
+        visualize_partition(DEBUGFILE, next2->pi); putc('\n', DEBUGFILE);    
 }
+
 
 PathNode* process(graph *g, int m, int n, PathNode *node){
     if (is_partition_discrete(node->pi)){
@@ -34,7 +46,7 @@ PathNode* process(graph *g, int m, int n, PathNode *node){
         DYNALLOCPART(node->W, cell_sz, "process");
         for (int i = 0; i < cell_sz; ++i) {
             node->W->lab[i] = node->pi->lab[cell+i];
-            node->W->ptn[i] = 1; 
+            node->W->ptn[i] = 0; 
             /** 
              * It's probably not the best to do this, but I'm using the partition
              * here somewhat incorrectly, but the struct fits the need perfectly.
@@ -53,7 +65,6 @@ PathNode* process(graph *g, int m, int n, PathNode *node){
     
     int target_branch = partition_as_W_pop_min(node->W);  // This is the next target
     
-
     /**
      * now that we have the next target branch, need to refine to it to create the next node
      */
@@ -80,7 +91,7 @@ PathNode* process(graph *g, int m, int n, PathNode *node){
 
     if (__DEBUG_C__) printf("C <path>  Partition:  ");  visualize_partition(DEBUGFILE, next->pi); printf("  cmp: %d\n", next->cmp);
 
-    if (next->cmp < 0) return next;
+    if (next->cmp <= 0) return next;  // so long as next is not WORSE than current, return it.
 
     return node;
 }

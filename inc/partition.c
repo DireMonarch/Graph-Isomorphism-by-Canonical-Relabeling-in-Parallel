@@ -248,16 +248,16 @@ int partition_as_W_length(partition *W) {
 }
 
 int partition_as_W_pop_min(partition *W) {
-    int max = -1;
+    int min = -1;
     int idx = -1;
     for (int i = 0; i < W->sz; ++i) {
-        if (W->ptn[i] == 0 && W->lab[i] > max) {
-            max = W->lab[i];
+        if (W->ptn[i] == 0 && (min < 0 || W->lab[i] < min)) {
+            min = W->lab[i];
             idx = i;
         }
     }
     
     if (idx >= 0) W->ptn[idx] = 1;  // popping means, marking it used, with a 1
 
-    return max;
+    return min;
 }

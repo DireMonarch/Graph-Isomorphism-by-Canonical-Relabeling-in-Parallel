@@ -5,6 +5,10 @@
 // #include "inc/partition.h"
 #include "inc/pcanon.h"
 
+
+
+
+
 int main( int argc, char **argv){
     FILE *infile;
     int codetype;
@@ -26,32 +30,8 @@ int main( int argc, char **argv){
 
     // putam(stdout, g, 0, TRUE, FALSE, m, n);  /* visualizes graph */
 
-    
-    partition *pi = generate_unit_partition(n);
-    partition *active = generate_unit_partition(n);
-
-
-    partition *curr;
+    run(g, m, n);
 
     
-    curr = refine(g, pi, active, m, n);
-    visualize_partition_with_char_offset(DEBUGFILE, curr, 'a'); putc('\n', DEBUGFILE);
-
-    //   0 / a
-    active->lab[0] = 0;
-    active->ptn[0] = 0;
-    active->sz = 1;
-
-    curr = refine(g, curr, active, m, n);
-    visualize_partition_with_char_offset(DEBUGFILE, curr, 'a'); putc('\n', DEBUGFILE);
-
-
-    // 2 / c
-    active->lab[0] = 2;
-    active->ptn[0] = 0;
-    active->sz = 1;
-    curr = refine(g, curr, active, m, n);
-
-    visualize_partition_with_char_offset(DEBUGFILE, curr, 'a'); putc('\n', DEBUGFILE);
-
+    
 }
