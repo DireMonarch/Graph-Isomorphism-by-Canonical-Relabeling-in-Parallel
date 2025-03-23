@@ -80,18 +80,20 @@ PathNode* process(graph *g, int m, int n, PathNode *node){
     next->pi = refine(g, node->pi, next_active, m, n);
     /** */
 
+    int cmp;  /* used to compare new node with best invariant <1 is better (new CL), 0 is equiv (auto if leaf), >1 worse (throw away)*/
+
     /* check if new node is discrete (leave node) */
     if (is_partition_discrete(next->pi)){
         /**
          * need to compare to the best invariant here
          */
     } else {
-        next->cmp = 0;  /* if the new node is not discrete, then set cmp to zero to not trigger anything else */
+        cmp = 0;  /* if the new node is not discrete, then set cmp to zero to not trigger anything else */
     }
 
-    if (__DEBUG_C__) printf("C <path>  Partition:  ");  visualize_partition(DEBUGFILE, next->pi); printf("  cmp: %d\n", next->cmp);
+    if (__DEBUG_C__) printf("C <path>  Partition:  ");  visualize_partition(DEBUGFILE, next->pi); printf("  cmp: %d\n", cmp);
 
-    if (next->cmp <= 0) return next;  // so long as next is not WORSE than current, return it.
+    if (cmp <= 0) return next;  // so long as next is not WORSE than current, return it.
 
     return node;
 }
