@@ -57,5 +57,9 @@ int first_index_of_max_cell_size_of_partition(partition *pi, int start_idx, int 
 void overwrite_partion_cell_with_cell_from_another_partition(partition *src, int src_idx, partition *dst, int dst_idx);
 void append_cell_to_partition_from_another_partition(partition *src, int src_idx, partition *dst);
 
+/* Functions specifically aimed at W */
+void visualize_partition_as_W(FILE *f, partition *pi);
+int partition_as_W_length(partition *W);
+int partition_as_W_pop_min(partition *W);
 
 #endif /* _PARTITION_H_ */

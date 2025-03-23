@@ -1,11 +1,89 @@
 #include "pcanon.h"
+#include "pathnode.h"
 
 #define __DEBUG__ FALSE
 
+#define __DEBUG_C__ TRUE  /* debug node creation events */
+#define __DEBUG_P__ TRUE  /* debgu node process events */
 
 
 static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int cell_sz, partition *alpha, int scope_idx, int scope_sz, int m, int n);
+static int _target_cell(partition *pi);
 
+/**
+ * Pretty sure we're going to need a "starting point" in here as well
+ */
+void run(graph *g){
+
+}
+
+PathNode* process(graph *g, int m, int n, PathNode *node){
+    if (is_partition_discrete(node->pi)){
+        /* LEAF NODE */
+        return NULL;
+    } 
+
+    /* NON LEAF NODE */
+    if (node->W == NULL){
+        /** 
+         * if this is a new node, there will not be a target cell 
+         * in this case, we need to pick one
+         */
+        int cell, cell_sz;
+        get_partition_cell_by_index(node->pi, &cell, &cell_sz, _target_cell(node->pi));
+        DYNALLOCPART(node->W, cell_sz, "process");
+        for (int i = 0; i < cell_sz; ++i) {
+            node->W->lab[i] = node->pi->lab[cell+i];
+            node->W->ptn[i] = 1; 
+            /** 
+             * It's probably not the best to do this, but I'm using the partition
+             * here somewhat incorrectly, but the struct fits the need perfectly.
+             * 
+             * Can reevaluate this later for clarity sake, but to move forward, 
+             * c'est la vie
+             */
+        }
+    }
+    if (__DEBUG_P__) printf("P <path>  W: ");  visualize_partition_as_W(DEBUGFILE, node->W); putc('\n', DEBUGFILE);
+
+    if (partition_as_W_length(node->W) == 0){
+        /* backtrack */  //Not sure what to do here yet!
+        return NULL;
+    }
+    
+    int target_branch = partition_as_W_pop_min(node->W);  // This is the next target
+    
+
+    /**
+     * now that we have the next target branch, need to refine to it to create the next node
+     */
+    PathNode *next;
+    DYNALLOCPATHNODE(next, "process");
+
+    partition *next_active;
+    DYNALLOCPART(next_active, n, "process");  //certainly not right, no need to make it this big for reals!!
+    next_active->lab[0] = target_branch;
+    next_active->ptn[0] = 0;
+    next_active->sz = 1;
+
+    next->pi = refine(g, node->pi, next_active, m, n);
+    /** */
+
+    /* check if new node is discrete (leave node) */
+    if (is_partition_discrete(next->pi)){
+        /**
+         * need to compare to the best invariant here
+         */
+    } else {
+        next->cmp = 0;  /* if the new node is not discrete, then set cmp to zero to not trigger anything else */
+    }
+
+    if (__DEBUG_C__) printf("C <path>  Partition:  ");  visualize_partition(DEBUGFILE, next->pi); printf("  cmp: %d\n", next->cmp);
+
+    if (next->cmp < 0) return next;
+
+    return node;
+}
 
 partition* refine(graph *g, partition *pi, partition *active, int m, int n){
     partition *pi_hat = copy_partition(pi);
@@ -80,6 +158,56 @@ partition* refine(graph *g, partition *pi, partition *active, int m, int n){
     if (__DEBUG__) {printf("\n\nFinal pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); putc('\n', DEBUGFILE);}
     return pi_hat;
 }
+
+
+// def first_index_of_non_fixed_cell_of_smallest_size(partition):
+//     '''
+//     Finds the smallest cell size > 1, and returns the index of the first instance
+//     of a cell of that size in partition
+//     '''
+//     smallest = -1
+//     idx = -1
+//     for i, cell in enumerate(partition):
+//         if len(cell) == 2:
+//             return i
+//         if len(cell) > smallest:
+//             smallest = len(cell)
+//             idx = i
+//     return idx
+
+/**
+ * This is our target cell function.  It picks the cell that is the smallest
+ * index of the smallest non-fixed cell size in the partition.abort
+ * 
+ * Finds the smallest cell size > 1, and returns the index of the first instance
+ * of a cell of that size in partition
+ */
+
+static int _target_cell(partition *pi){
+    int smallest_sz = pi->sz+1;
+    int smallest_idx = -1; 
+    int current_sz = 1;
+    int current_idx = 0;
+
+    for (int i = 0; i < pi->sz; ++i){
+        // printf("i: %d    pi->ptn[%d]: %d smallest_sz: %d   smallest_idx: %d   current_sz: %d   current_idx: %d\n", 
+        //             i, i, pi->ptn[i], smallest_sz, smallest_idx, current_sz, current_idx);
+        if (pi->ptn[i] == 0){
+            /* end of current cell */
+            if (current_sz < smallest_sz) {
+                if (current_sz > 1) {
+                    if (current_sz == 2) return current_idx;  // the first time we find a cell of size 2 we can return
+                    smallest_sz = current_sz;
+                    smallest_idx = current_idx;
+                }
+                current_sz = 0;
+                ++current_idx;
+            }
+        }
+        ++current_sz;
+    }
+    return smallest_idx;
+ }
 
 /**
  * Returns the degree of vertex v with respect to the verticies in scope

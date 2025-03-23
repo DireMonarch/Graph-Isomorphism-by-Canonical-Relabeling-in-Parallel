@@ -218,3 +218,46 @@ void append_cell_to_partition_from_another_partition(partition *src, int src_idx
     }
     dst->sz += src_cell_size;
 }
+
+
+void visualize_partition_as_W(FILE *f, partition *W){
+    int last_ptn = 0;
+    putc('{', f);
+    for (int j = 0; j < 3; ++j){
+        putc('(', f);
+        boolean first = TRUE;
+        for (int i = 0; i < W->sz; ++i){
+            if (W->ptn[i] == j) {
+                if (first) first = FALSE;
+                else fprintf(f, ", ");
+                fprintf(f, "%d", W->lab[i]);
+            }
+        }
+        putc(')', f);
+        if (j<2) putc(' ', f);
+    }
+    putc('}', f);
+}
+
+int partition_as_W_length(partition *W) {
+    int len = 0;
+    for (int i = 0; i < W->sz; ++i) {
+        if (W->ptn[i] == 0) ++len;
+    }
+    return len;
+}
+
+int partition_as_W_pop_min(partition *W) {
+    int max = -1;
+    int idx = -1;
+    for (int i = 0; i < W->sz; ++i) {
+        if (W->ptn[i] == 0 && W->lab[i] > max) {
+            max = W->lab[i];
+            idx = i;
+        }
+    }
+    
+    if (idx >= 0) W->ptn[idx] = 1;  // popping means, marking it used, with a 1
+
+    return max;
+}

@@ -24,7 +24,7 @@ int main( int argc, char **argv){
     graph *g = readg(infile, NULL, 0, &m, &n);
     fclose(infile);
 
-    putam(stdout, g, 0, TRUE, FALSE, m, n);
+    // putam(stdout, g, 0, TRUE, FALSE, m, n);  /* visualizes graph */
 
     
     partition *pi = generate_unit_partition(n);
