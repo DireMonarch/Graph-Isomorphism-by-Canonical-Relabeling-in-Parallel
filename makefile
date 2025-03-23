@@ -3,9 +3,9 @@ CC		=	gcc
 
 all: main
 
-main: main.c p_gtools.o util.o p_util.o partition.o pcanon.o permutation.o
+main: main.c p_gtools.o util.o p_util.o partition.o pcanon.o permutation.o badstack.o
 	# $(CC) main.c 
-	$(CC) main.c lib/p_gtools.o lib/p_util.o lib/util.o lib/partition.o lib/pcanon.o lib/permutation.o
+	$(CC) main.c lib/p_gtools.o lib/p_util.o lib/util.o lib/partition.o lib/pcanon.o lib/permutation.o lib/badstack.o
 
 pcanon.o: inc/pcanon.c inc/pcanon.h
 	$(CC) -c inc/pcanon.c -o lib/pcanon.o
@@ -24,6 +24,9 @@ partition.o: inc/partition.c inc/partition.h
 
 permutation.o: inc/permutation.c inc/permutation.h	
 	$(CC) -c inc/permutation.c  -o lib/permutation.o
+
+badstack.o: inc/badstack.c inc/badstack.h	
+	$(CC) -c inc/badstack.c  -o lib/badstack.o
 
 run: all
 	./a.out

@@ -1,4 +1,5 @@
 #include "pcanon.h"
+#include "badstack.h"
 
 #define __DEBUG__ FALSE
 
@@ -10,15 +11,26 @@ static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int c
 static int _target_cell(partition *pi);
 
 void run(graph *g, int m, int n){
+    BadStack *stack = malloc(sizeof(BadStack));    // Yep, it's bad
+    stack_initialize(stack, n);
+
     partition *pi = generate_unit_partition(n);
     partition *active = generate_unit_partition(n);
 
 
     PathNode *curr, *next1, *next2;
     DYNALLOCPATHNODE(curr, "main");
-
     curr->pi = refine(g, pi, active, m, n);
     visualize_partition(DEBUGFILE, curr->pi); putc('\n', DEBUGFILE);
+
+    stack_push(stack, curr);  // push starting node to stack before starting loop
+
+    /**
+     * none of this stack business works, we can't stack the nodes, because
+     * that means we've already generated them.   we need to stack the vertices
+     * in W!
+     */
+
     
     next1 = process(g, m, n, curr);
     next2 = process(g, m, n, next1);
