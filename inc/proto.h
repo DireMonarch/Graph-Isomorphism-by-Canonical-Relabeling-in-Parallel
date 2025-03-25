@@ -145,4 +145,6 @@ static const setword bit[] =
 #define ERRFILE stderr
 #define DEBUGFILE stdout
 
+#define ENDL() putc('\n', DEBUGFILE);
+
 #endif /* _PROTO_H_ */

@@ -20,10 +20,11 @@
  */
 
 typedef struct {
-    int *lab; /* vertices in order for the partion */
-    int *ptn; /* 0 or 1, 0 means index is end of cell, 1 means cell continues */
-    size_t sz;  /* number of elements in lab and ptn */
-    size_t allocated_sz; /* originally allocated size DON'T UPDATE!!! */
+    int *lab;               /* vertices in order for the partion */
+    int *ptn;               /* 0 or 1, 0 means index is end of cell, 1 means cell continues */
+    size_t sz;              /* number of elements in lab and ptn */
+    size_t allocated_sz;    /* originally allocated size DON'T UPDATE!!! */
+    int _ref_count;         /* Just used for counting references, as if I might decide to clean up evenetually */
 } partition;
 
 #define DYNALLOCPART(name,new_sz,msg) \
@@ -32,14 +33,17 @@ typedef struct {
     if ((name->lab=(int*)ALLOCS(new_sz,sizeof(int))) == NULL) {alloc_error(msg);} \
     if ((name->ptn=(int*)ALLOCS(new_sz,sizeof(int))) == NULL) {alloc_error(msg);} \
     name->sz = new_sz; \
-    name->allocated_sz = new_sz;
+    name->allocated_sz = new_sz; \
+    name->_ref_count = 1;
 
 #define FREEPART(name) \
     if(name) { \
-        if (name->lab) {FREES(name->lab);} \
-        if (name->ptn) {FREES(name->ptn);} \
-        FREES(name); \
-        name=NULL; }
+        name->_ref_count--; \
+        if(name->_ref_count < 1) { \
+            if (name->lab) {FREES(name->lab);} \
+            if (name->ptn) {FREES(name->ptn);} \
+            FREES(name); \
+            name=NULL; }}
 
 
 
@@ -57,9 +61,8 @@ int first_index_of_max_cell_size_of_partition(partition *pi, int start_idx, int 
 void overwrite_partion_cell_with_cell_from_another_partition(partition *src, int src_idx, partition *dst, int dst_idx);
 void append_cell_to_partition_from_another_partition(partition *src, int src_idx, partition *dst);
 
-/* Functions specifically aimed at W */
-void visualize_partition_as_W(FILE *f, partition *pi);
-int partition_as_W_length(partition *W);
-int partition_as_W_pop_min(partition *W);
+partition* generate_permutation(partition *src, partition *dst);
+graph* calculate_invariant(graph *g, int m, int n, partition *permutation);
+
 
 #endif /* _PARTITION_H_ */

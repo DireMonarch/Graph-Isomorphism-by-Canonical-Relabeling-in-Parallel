@@ -9,6 +9,6 @@
 void run(graph *g, int m, int n);
 
 partition* refine(graph *G, partition *pi, partition *active, int m, int n);
-PathNode* process(graph *g, int m, int n, PathNode *node);
+
 
 #endif /* _PCANNON_H_ */

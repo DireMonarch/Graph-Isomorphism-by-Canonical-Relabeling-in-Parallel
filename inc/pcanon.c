@@ -1,113 +1,144 @@
 #include "pcanon.h"
 #include "badstack.h"
+#include "path.h"
 
 #define __DEBUG__ FALSE
 
-#define __DEBUG_C__ TRUE  /* debug node creation events */
+#define __DEBUG_C__ TRUE  /* debug node comparison events */
 #define __DEBUG_P__ TRUE  /* debgu node process events */
 
 
 static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int cell_sz, partition *alpha, int scope_idx, int scope_sz, int m, int n);
 static int _target_cell(partition *pi);
+static void _first_node(graph *g, int m, int n, BadStack *stack);
+static void _process_leaf(Path *path, partition *pi);
+static void _process_next(graph *g, int m, int n, BadStack *stack);
 
 void run(graph *g, int m, int n){
     BadStack *stack = malloc(sizeof(BadStack));    // Yep, it's bad
     stack_initialize(stack, n);
 
-    partition *pi = generate_unit_partition(n);
-    partition *active = generate_unit_partition(n);
+    int nodes_processed = 0;
+
+    _first_node(g, m, n, stack);
+    // visualize_stack(DEBUGFILE, stack);
+
+    while(stack_size(stack) > 0) {
+        _process_next(g, m, n, stack);
+        ++nodes_processed;
+        // visualize_stack(DEBUGFILE, stack);
+    }
 
 
-    PathNode *curr, *next1, *next2;
-    DYNALLOCPATHNODE(curr, "main");
-    curr->pi = refine(g, pi, active, m, n);
-    visualize_partition(DEBUGFILE, curr->pi); putc('\n', DEBUGFILE);
+    printf("\nNodes Processed : %d\n", nodes_processed);
 
-    stack_push(stack, curr);  // push starting node to stack before starting loop
-
-    /**
-     * none of this stack business works, we can't stack the nodes, because
-     * that means we've already generated them.   we need to stack the vertices
-     * in W!
-     */
-
-    
-    next1 = process(g, m, n, curr);
-    next2 = process(g, m, n, next1);
-
-
-    if (next2 != NULL)
-        visualize_partition(DEBUGFILE, next2->pi); putc('\n', DEBUGFILE);    
 }
 
 
-PathNode* process(graph *g, int m, int n, PathNode *node){
-    if (is_partition_discrete(node->pi)){
-        /* LEAF NODE */
-        return NULL;
-    } 
 
-    /* NON LEAF NODE */
-    if (node->W == NULL){
-        /** 
-         * if this is a new node, there will not be a target cell 
-         * in this case, we need to pick one
-         */
+static void _first_node(graph *g, int m, int n, BadStack *stack) {
+    // PathNode *curr;
+    // DYNALLOCPATHNODE(curr, "first_node");
+    // /** 
+    //  * Allocate space this way for path only for the root!
+    //  */
+    // curr->path = (Path*)malloc(sizeof(Path));
+    // curr->path->data = NULL;
+    // curr->path->sz = 0;
+    // /** */
+
+    partition *pi = generate_unit_partition(n);
+    partition *active = generate_unit_partition(n);
+    partition *new_pi = refine(g, pi, active, m, n);
+
+
+
+
+
+    if (!is_partition_discrete(new_pi)) {
+        /* if it is not discrete, add the child nodes, in proper order to the stack */
         int cell, cell_sz;
-        get_partition_cell_by_index(node->pi, &cell, &cell_sz, _target_cell(node->pi));
-        DYNALLOCPART(node->W, cell_sz, "process");
-        for (int i = 0; i < cell_sz; ++i) {
-            node->W->lab[i] = node->pi->lab[cell+i];
-            node->W->ptn[i] = 0; 
-            /** 
-             * It's probably not the best to do this, but I'm using the partition
-             * here somewhat incorrectly, but the struct fits the need perfectly.
-             * 
-             * Can reevaluate this later for clarity sake, but to move forward, 
-             * c'est la vie
-             */
+        get_partition_cell_by_index(new_pi, &cell, &cell_sz, _target_cell(new_pi));
+        for (int i = cell+cell_sz-1; i >= cell; --i) {
+            PathNode *next;
+            DYNALLOCPATHNODE(next, "process");
+            DYNALLOCPATH(next->path, 1, "process");
+            next->path->data[0] = new_pi->lab[i];
+            next->pi = new_pi;
+            new_pi->_ref_count++;  /* Doing this so we know how many references to this one partition exist, to keep cleanup safe */  /* Sure this'll really work */
+            stack_push(stack, next);
         }
     }
-    if (__DEBUG_P__) printf("P <path>  W: ");  visualize_partition_as_W(DEBUGFILE, node->W); putc('\n', DEBUGFILE);
-
-    if (partition_as_W_length(node->W) == 0){
-        /* backtrack */  //Not sure what to do here yet!
-        return NULL;
-    }
     
-    int target_branch = partition_as_W_pop_min(node->W);  // This is the next target
     
-    /**
-     * now that we have the next target branch, need to refine to it to create the next node
-     */
-    PathNode *next;
-    DYNALLOCPATHNODE(next, "process");
 
-    partition *next_active;
-    DYNALLOCPART(next_active, n, "process");  //certainly not right, no need to make it this big for reals!!
-    next_active->lab[0] = target_branch;
-    next_active->ptn[0] = 0;
-    next_active->sz = 1;
 
-    next->pi = refine(g, node->pi, next_active, m, n);
-    /** */
+    FREEPART(new_pi);
+    FREEPART(active);
+    FREEPART(pi);
+}
 
+static void _process_leaf(Path *path, partition *pi) {
     int cmp;  /* used to compare new node with best invariant <1 is better (new CL), 0 is equiv (auto if leaf), >1 worse (throw away)*/
 
-    /* check if new node is discrete (leave node) */
-    if (is_partition_discrete(next->pi)){
-        /**
-         * need to compare to the best invariant here
-         */
+    /**
+     * Need to put actual invariant comparison here!
+     */
+    cmp = 0;
+    
+    if (__DEBUG_C__) printf("C "); visualize_path(DEBUGFILE, path); printf("  Partition:  ");  visualize_partition(DEBUGFILE, pi); printf("  cmp: %d\n", cmp);
+
+
+}
+
+static void _process_next(graph *g, int m, int n, BadStack *stack) {
+    PathNode *node = stack_pop(stack);
+
+    /**
+     * Creating the active set of cells to refine against
+     */
+    partition *active;
+    DYNALLOCPART(active, n, "process");  //certainly not right, no need to make it this big for reals!!
+    active->lab[0] = node->path->data[node->path->sz-1];
+    active->ptn[0] = 0;
+    active->sz = 1;
+
+
+    /**
+     * 
+     * Refinement to create new partition is being done here.
+     * 
+     */
+    partition *new_pi = refine(g, node->pi, active, m, n);
+
+    if (__DEBUG_P__) printf("P "); visualize_path(DEBUGFILE, node->path);  printf("  pi: ");  visualize_partition(DEBUGFILE, new_pi);  printf("  active: ");  visualize_partition(DEBUGFILE, active); putc('\n', DEBUGFILE);
+
+
+    /**
+     * New partion means new work list, if it is not discrete
+     */
+    if (is_partition_discrete(new_pi)) {
+        _process_leaf(node->path, new_pi);
     } else {
-        cmp = 0;  /* if the new node is not discrete, then set cmp to zero to not trigger anything else */
+        /* if it is not discrete, add the child nodes, in proper order to the stack */
+        int cell, cell_sz;
+        get_partition_cell_by_index(new_pi, &cell, &cell_sz, _target_cell(new_pi));
+        for (int i = cell+cell_sz-1; i >= cell; --i) {
+            PathNode *next;
+            DYNALLOCPATHNODE(next, "process");
+            DYNALLOCPATH(next->path, node->path->sz+1, "process");
+            for (int j = 0; j < node->path->sz; ++j) {
+                next->path->data[j] = node->path->data[j];
+            }
+            next->path->data[next->path->sz-1] = new_pi->lab[i];
+            next->pi = new_pi;
+            new_pi->_ref_count++;  /* Doing this so we know how many references to this one partition exist, to keep cleanup safe */  /* Sure this'll really work */
+            stack_push(stack, next);
+        }
     }
 
-    if (__DEBUG_C__) printf("C <path>  Partition:  ");  visualize_partition(DEBUGFILE, next->pi); printf("  cmp: %d\n", cmp);
-
-    if (cmp <= 0) return next;  // so long as next is not WORSE than current, return it.
-
-    return node;
+    FREEPART(active);
+    // FREEPATHNODE(node);
 }
 
 partition* refine(graph *g, partition *pi, partition *active, int m, int n){

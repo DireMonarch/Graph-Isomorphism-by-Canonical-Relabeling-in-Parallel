@@ -261,3 +261,120 @@ int partition_as_W_pop_min(partition *W) {
 
     return min;
 }
+
+
+
+partition* generate_permutation(partition *src, partition *dst) {
+    if (!is_partition_discrete(src) || !is_partition_discrete(dst)) return NULL;
+
+    /* count the number of vertices that don't match, so we know how large to make the permutation array */
+    int diff = 0;
+    for (int i = 0; i < src->sz; ++i) {
+        if (src->lab[i] != dst->lab[i]) ++diff;
+    }
+    /* allocate the permutation array */
+    partition *permutation;
+    DYNALLOCPART(permutation, diff, "generate_permutation");
+
+    /* now walk the partitions captruing the permutation */
+    int cell_start;
+    int perm_idx = 0;
+    for (int i = 0; i < src->sz; ++i) {
+        
+        
+        /* verify location has not already been handled (dst->ptn != 0).  If not, then check that the two are not equal*/
+        if (dst->ptn[i] == 0 && src->lab[i] != dst->lab[i]) {
+            /* if the vertices don't match, we are starting a new cell in the permuation */
+
+            /* Add the first two (trivial) vertices to the permutation */
+            permutation->ptn[perm_idx] = 1; /* set all ptn entries to 1, we'll fix the end later */
+            permutation->lab[perm_idx++] = dst->lab[i];
+            permutation->ptn[perm_idx] = 1; /* set all ptn entries to 1, we'll fix the end later */
+            permutation->lab[perm_idx++] = src->lab[i];
+            
+            /* mark this position as already consumed */
+            dst->ptn[i] = 1;
+
+            /* record vertex at start of cell, so we know when to stop */
+            cell_start = dst->lab[i];
+            
+            /* loop through the rest of the permutation, ut*/
+            while (1) {
+                /* search for the next entry */
+                int j;
+                for (j = i+1; j < dst->sz; ++j) {
+                    if (dst->lab[j] == permutation->lab[perm_idx-1]) break; /* for j */
+                }
+                
+                /* mark this position as already consumed */
+                dst->ptn[j] = 1;
+
+                /* check to see if we are back at the start, and if so break out of while */
+                if (src->lab[j] == cell_start) {
+                    permutation->ptn[perm_idx-1] = 0; /* if we are at the end of the cell, mark the last vertex in cell as the last */
+                    break; /* while */
+                }
+
+                /* add the vertex at the corresponding location in src */
+                permutation->ptn[perm_idx] = 1;
+                permutation->lab[perm_idx++] = src->lab[j];
+            }
+        }
+    }
+
+    /* reset dst->ptn to zeros, since we messed with it above */
+    for (int i = 0; i < dst->sz; ++i) {
+        dst->ptn[i] = 0;
+    }
+
+    return permutation;
+}
+
+graph* calculate_invariant(graph *g, int m, int n, partition *permutation) {
+    graph *invar;
+    if ((invar = (graph*)ALLOCS(n,m*sizeof(graph))) == NULL) runtime_error("calculate_invariant: malloc failed\n");
+
+    for (int i = 0; i < m*n; ++i) {
+        invar[i] = g[i];
+    }
+
+    int si, di;
+    /* allocates space for temporary row */
+    setword temp;
+
+    /* Swap Rows */
+    for (int i = 0; i < permutation->sz; ++i) {
+        di = permutation->lab[i]; /* destination index, it's strange but it works */
+        while(permutation->ptn[i] == 1) {
+            ++i;
+            si = permutation->lab[i]; /* source index */
+            
+            /* for matrices larger than one setword, walk through each setword on each row */
+            for (int j = 0; j < m; ++j) {
+                temp = invar[(di * m) + j];
+                invar[(di * m) + j] = invar[(si * m) + j];
+                invar[(si * m) + j] = temp;
+            }
+        }
+    }
+
+    /* Swap Columns */
+    for (int i = 0; i < permutation->sz; ++i) {
+        di = permutation->lab[i]; /* destination index, it's strange but it works */
+        while(permutation->ptn[i] == 1) {
+            ++i;
+            si = permutation->lab[i]; /* source index */
+            
+            set *invar_row;  /* used to track the current row */
+            /* for matrices larger than one setword, walk through each setword on each row */
+            for (int j = 0; j < n; ++j) {
+                invar_row = invar + (j*m);
+                temp = ISELEMENT(invar_row, di);  /* copy dest to temp */
+                if (ISELEMENT(invar_row, si)) ADDELEMENT(invar_row, di); else DELELEMENT(invar_row, di);  /* copy source to dest */
+                if (temp) ADDELEMENT(invar_row, si); else DELELEMENT(invar_row, si);  /* copy temp to source */
+            }
+        }
+    }
+   
+    return invar;
+}

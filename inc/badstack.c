@@ -32,4 +32,13 @@ void stack_initialize(BadStack *stack, int size){
     stack->_private = malloc(sizeof(PathNode)*size);
     if (stack->_private == NULL) alloc_error("stack_new");
     stack->allocated_sz = size;
+    stack->sp = -1;
+}
+
+
+void visualize_stack(FILE *f, BadStack *stack) {
+    fprintf(f, "Stack:  [%d] \n", stack->sp+1);
+    for (int i = stack->sp; i >= 0; --i) {
+        fprintf(f, "\tpath: "); visualize_path(f, stack->_private[i]->path); fprintf(f, "  pi: "); visualize_partition(f, stack->_private[i]->pi); putc('\n', f);
+    }
 }

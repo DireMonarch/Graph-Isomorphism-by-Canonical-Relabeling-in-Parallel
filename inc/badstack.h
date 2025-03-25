@@ -22,6 +22,7 @@ PathNode* stack_pop(BadStack *stack);
 PathNode* stack_peek(BadStack *stack);
 int stack_size(BadStack *stack);
 void stack_initialize(BadStack *stack, int size);
+void visualize_stack(FILE *f, BadStack *stack);
 
 #endif /* _STACK_H_ */
  
