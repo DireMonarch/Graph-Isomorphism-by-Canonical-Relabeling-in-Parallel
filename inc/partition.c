@@ -378,3 +378,12 @@ graph* calculate_invariant(graph *g, int m, int n, partition *permutation) {
    
     return invar;
 }
+
+
+int compare_invariants(graph *A, graph *B, int m, int n) {
+    for (int i = 0; i < m*n; ++i) {
+        if (A[i] < B[i]) return 1;
+        if (A[i] > B[i]) return -1;
+    }
+    return 0;
+}

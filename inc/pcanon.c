@@ -11,49 +11,93 @@
 static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int cell_sz, partition *alpha, int scope_idx, int scope_sz, int m, int n);
 static int _target_cell(partition *pi);
 static void _first_node(graph *g, int m, int n, BadStack *stack);
-static void _process_leaf(Path *path, partition *pi);
-static void _process_next(graph *g, int m, int n, BadStack *stack);
+static void _process_leaf(Path *path, partition *pi, Status *status);
+static void _process_next(graph *g, int m, int n, BadStack *stack, Status *status);
 
 void run(graph *g, int m, int n){
     BadStack *stack = malloc(sizeof(BadStack));    // Yep, it's bad
     stack_initialize(stack, n);
 
+    Status *status = (Status*)malloc(sizeof(Status));
+    status->g = g;
+    status->m = m;
+    status->n = n;
+    status->cl = NULL;
+    status->cl_pi = NULL;
+    status->best_invar = NULL;
+    status->best_invar_path = NULL;
+
+    /* build theta and mcr */
+    status->theta = generate_unit_partition(n);
+    for (int i = 0; i < status->theta->sz; ++i) status->theta->ptn[i] = 0; /* theta starts off discrete */
+    status->mcr = (int*)malloc(sizeof(int)*n);
+    status->mcr_sz = 0; 
+    
+    DYNALLOCAUTOGROUP(status->autogrp, n, n, "run_dyn_autogrp");
+
+    status->flag_new_cl = FALSE;
+    status->flag_new_auto = FALSE;
+    
+    DYNALLOCPART(status->base_pi, n, "run_status_malloc");
+    for(int i = 0; i < n; ++i) {
+        status->base_pi->lab[i] = i;
+        status->base_pi->ptn[i] = 0;
+    }
+
     int nodes_processed = 0;
 
     _first_node(g, m, n, stack);
-    // visualize_stack(DEBUGFILE, stack);
 
     while(stack_size(stack) > 0) {
-        _process_next(g, m, n, stack);
+        status->flag_new_cl = FALSE;
+        status->flag_new_auto = FALSE;
+        _process_next(g, m, n, stack, status);
+        if (status->flag_new_cl) {
+            printf("MPI: Communicate New Best CL  "); visualize_partition_with_char_offset(DEBUGFILE, status->cl, 'a'); ENDL();
+            /* stuff goes here */
+        } else if (status->flag_new_auto) {
+            partition *aut = status->autogrp->automorphisms[status->autogrp->sz-1];
+            printf("MPI: Communicate New Auto  "); visualize_partition_with_char_offset(DEBUGFILE, aut, 'a'); ENDL();
+            // automorphisms_merge_perm_into_oribit(aut, status->theta);
+            // automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);
+
+            // printf("Theta: "); visualize_partition_with_char_offset(DEBUGFILE, status->theta, 'a'); printf("  MCR (%d): ", status->mcr_sz);
+            // for (int i = 0; i < status->mcr_sz; ++i) {
+            //     printf(" %d", status->mcr[i]);
+            // }
+            // ENDL();
+            /* stuff goes here too! */
+        }
         ++nodes_processed;
-        // visualize_stack(DEBUGFILE, stack);
     }
 
 
     printf("\nNodes Processed : %d\n", nodes_processed);
+
+    printf("Canonical Label: "); visualize_partition_with_char_offset(DEBUGFILE, status->cl, 'a'); ENDL();
+    
+    for (int i = 0; i < status->autogrp->sz; ++i) {
+        printf("Automorphism: "); visualize_partition_with_char_offset(DEBUGFILE, status->autogrp->automorphisms[i], 'a'); ENDL();
+    }
+
+    free(stack);
+    FREES(status->theta);
+    if (status->mcr) free(status->mcr);
+    FREES(status->base_pi);
+    FREEAUTOGROUP(status->autogrp);
+    if(status->best_invar) free(status->best_invar);
+    if(status->best_invar_path) free(status->best_invar_path);
+    free(status);
 
 }
 
 
 
 static void _first_node(graph *g, int m, int n, BadStack *stack) {
-    // PathNode *curr;
-    // DYNALLOCPATHNODE(curr, "first_node");
-    // /** 
-    //  * Allocate space this way for path only for the root!
-    //  */
-    // curr->path = (Path*)malloc(sizeof(Path));
-    // curr->path->data = NULL;
-    // curr->path->sz = 0;
-    // /** */
 
     partition *pi = generate_unit_partition(n);
     partition *active = generate_unit_partition(n);
     partition *new_pi = refine(g, pi, active, m, n);
-
-
-
-
 
     if (!is_partition_discrete(new_pi)) {
         /* if it is not discrete, add the child nodes, in proper order to the stack */
@@ -70,28 +114,47 @@ static void _first_node(graph *g, int m, int n, BadStack *stack) {
         }
     }
     
-    
-
-
     FREEPART(new_pi);
     FREEPART(active);
     FREEPART(pi);
 }
 
-static void _process_leaf(Path *path, partition *pi) {
-    int cmp;  /* used to compare new node with best invariant <1 is better (new CL), 0 is equiv (auto if leaf), >1 worse (throw away)*/
+static void _process_leaf(Path *path, partition *pi, Status *status) {
+    int cmp = 0;  /* used to compare new node with best invariant <1 is better (new CL), 0 is equiv (auto if leaf), >1 worse (throw away)*/
 
-    /**
-     * Need to put actual invariant comparison here!
-     */
-    cmp = 0;
-    
-    if (__DEBUG_C__) printf("C "); visualize_path(DEBUGFILE, path); printf("  Partition:  ");  visualize_partition(DEBUGFILE, pi); printf("  cmp: %d\n", cmp);
+    partition *perm = generate_permutation(status->base_pi, pi);
 
+    graph *invar = calculate_invariant(status->g, status->m, status->n, perm);
+    if (status->best_invar == NULL) {
+        cmp = -1;
+    } else {
+        cmp = compare_invariants(status->best_invar, invar, status->m, status->n);
+    }
+   
+    if (__DEBUG_C__) printf("C "); visualize_path(DEBUGFILE, path); printf("  Partition:  ");  visualize_partition(DEBUGFILE, pi); printf("  cmp: %d\n\n", cmp);
 
+    if (cmp < 0) {
+        /* New best invariant found! */
+        status->flag_new_cl = TRUE;
+        status->cl = perm;
+        status->cl_pi = pi;
+        status->best_invar = invar;
+        status->best_invar_path = path;
+    } else if (cmp == 0) {
+        /* automorphism found */
+        status->flag_new_auto = TRUE;
+        partition *aut = generate_permutation(status->cl_pi, pi);
+        automorphisms_append(status->autogrp, aut);
+
+        FREEPART(perm);
+        FREES(invar);       
+    } else {
+        FREEPART(perm);
+        FREES(invar);
+    }
 }
 
-static void _process_next(graph *g, int m, int n, BadStack *stack) {
+static void _process_next(graph *g, int m, int n, BadStack *stack, Status *status) {
     PathNode *node = stack_pop(stack);
 
     /**
@@ -111,14 +174,14 @@ static void _process_next(graph *g, int m, int n, BadStack *stack) {
      */
     partition *new_pi = refine(g, node->pi, active, m, n);
 
-    if (__DEBUG_P__) printf("P "); visualize_path(DEBUGFILE, node->path);  printf("  pi: ");  visualize_partition(DEBUGFILE, new_pi);  printf("  active: ");  visualize_partition(DEBUGFILE, active); putc('\n', DEBUGFILE);
+    if (__DEBUG_P__) printf("P "); visualize_path(DEBUGFILE, node->path);  printf("  pi: ");  visualize_partition(DEBUGFILE, new_pi);  printf("  active: ");  visualize_partition(DEBUGFILE, active); ENDL();
 
 
     /**
      * New partion means new work list, if it is not discrete
      */
     if (is_partition_discrete(new_pi)) {
-        _process_leaf(node->path, new_pi);
+        _process_leaf(node->path, new_pi, status);
     } else {
         /* if it is not discrete, add the child nodes, in proper order to the stack */
         int cell, cell_sz;
@@ -146,7 +209,7 @@ partition* refine(graph *g, partition *pi, partition *active, int m, int n){
     partition *alpha = copy_partition(active);
     int a = 0;
 
-    if (__DEBUG__) {printf("pi: "); visualize_partition(DEBUGFILE, pi_hat); printf(" alpha: "); visualize_partition(DEBUGFILE, alpha); putc('\n', DEBUGFILE);}
+    if (__DEBUG__) {printf("pi: "); visualize_partition(DEBUGFILE, pi_hat); printf(" alpha: "); visualize_partition(DEBUGFILE, alpha); ENDL();}
     while (a < partition_cell_count(alpha) && !is_partition_discrete(pi_hat)) {
         int scope_idx, scope_sz;  // refinement scope cell index in alpha, and size of cell
         get_partition_cell_by_index(alpha, &scope_idx, &scope_sz, a);
@@ -180,18 +243,18 @@ partition* refine(graph *g, partition *pi, partition *active, int m, int n){
                     if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); printf("  index alpha_idx: %d\n", alpha_idx );}
                     overwrite_partion_cell_with_cell_from_another_partition(pi_hat, t, alpha, alpha_idx);
                     if (__DEBUG__) printf("\tPOST copy: \n");
-                    if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); putc('\n', DEBUGFILE);}
-                    if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); putc('\n', DEBUGFILE);}
+                    if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); ENDL();}
+                    if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); ENDL();}
 
                     for (int i = p; i < p + new_cell_size; ++i){
                         if (i != t){
                             if (__DEBUG__) printf("\n\tNeed to append: \n");
                             if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); printf("  index i: %d  \n", i);}
-                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); putc('\n', DEBUGFILE);}
+                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); ENDL();}
                             append_cell_to_partition_from_another_partition(pi_hat, i, alpha);
                             if (__DEBUG__) printf("\tPOST append: \n");
-                            if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); putc('\n', DEBUGFILE);}
-                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); putc('\n', DEBUGFILE);}
+                            if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); ENDL();}
+                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); ENDL();}
 
                         }
                     }
@@ -199,11 +262,11 @@ partition* refine(graph *g, partition *pi, partition *active, int m, int n){
                     for (int i = p; i < p + new_cell_size; ++i){
                             if (__DEBUG__) printf("\n\tNeed to append: \n");
                             if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); printf("  index i: %d  \n", i);}
-                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); putc('\n', DEBUGFILE);}
+                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); ENDL();}
                             append_cell_to_partition_from_another_partition(pi_hat, i, alpha);
                             if (__DEBUG__) printf("\tPOST append: \n");
-                            if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); putc('\n', DEBUGFILE);}
-                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); putc('\n', DEBUGFILE);}
+                            if (__DEBUG__) {printf("\t\tSRC: pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); ENDL();}
+                            if (__DEBUG__) {printf("\t\tDST: alpha: "); visualize_partition(DEBUGFILE, alpha); ENDL();}
                     }                    
                 }
             }
@@ -211,7 +274,7 @@ partition* refine(graph *g, partition *pi, partition *active, int m, int n){
         ++a;
 
     }
-    if (__DEBUG__) {printf("\n\nFinal pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); putc('\n', DEBUGFILE);}
+    if (__DEBUG__) {printf("\n\nFinal pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); ENDL();}
     return pi_hat;
 }
 

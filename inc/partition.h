@@ -63,6 +63,7 @@ void append_cell_to_partition_from_another_partition(partition *src, int src_idx
 
 partition* generate_permutation(partition *src, partition *dst);
 graph* calculate_invariant(graph *g, int m, int n, partition *permutation);
+int compare_invariants(graph *A, graph *B, int m, int n);
 
 
 #endif /* _PARTITION_H_ */
