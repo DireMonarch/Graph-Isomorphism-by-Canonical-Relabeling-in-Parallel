@@ -58,19 +58,24 @@ void run(graph *g, int m, int n){
         } else if (status->flag_new_auto) {
             partition *aut = status->autogrp->automorphisms[status->autogrp->sz-1];
             printf("MPI: Communicate New Auto  "); visualize_partition_with_char_offset(DEBUGFILE, aut, 'a'); ENDL();
-            // automorphisms_merge_perm_into_oribit(aut, status->theta);
-            // automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);
+            automorphisms_merge_perm_into_oribit(aut, status->theta);
+            automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);
 
-            // printf("Theta: "); visualize_partition_with_char_offset(DEBUGFILE, status->theta, 'a'); printf("  MCR (%d): ", status->mcr_sz);
-            // for (int i = 0; i < status->mcr_sz; ++i) {
-            //     printf(" %d", status->mcr[i]);
-            // }
-            // ENDL();
+            printf("Theta: "); visualize_partition_with_char_offset(DEBUGFILE, status->theta, 'a'); printf("  MCR (%d): ", status->mcr_sz);
+            for (int i = 0; i < status->mcr_sz; ++i) {
+                printf(" %c", (char)('a'+status->mcr[i]));
+            }
+            ENDL();
             /* stuff goes here too! */
         }
         ++nodes_processed;
     }
 
+
+    /*  Bridges  at Pitsburgh super computer center PSC */
+    /**
+     * IPDPS  - October 2025 submission deadline
+     */
 
     printf("\nNodes Processed : %d\n", nodes_processed);
 
