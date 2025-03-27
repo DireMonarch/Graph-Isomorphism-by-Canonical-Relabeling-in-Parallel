@@ -4,6 +4,7 @@
 *.csv
 *.tsv
 extra/
+lib/
 
 # VSCode
 .vscode
