@@ -28,12 +28,21 @@ void automorphisms_append(AutomorphismGroup *autogrp, partition *aut) {
     if (autogrp->sz == autogrp->allocated_sz) {
         /* need to reallocate here */
         /* will come back to this probably.. */
+        // for (int i = 0; i < autogrp->sz; ++i) {
+        //     visualize_partition(DEBUGFILE, autogrp->automorphisms[i]); ENDL();
+        // }
         runtime_error("Need to implement resizing automorphism group!");
     }
 
     autogrp->automorphisms[autogrp->sz++] = aut;
 }
 
+boolean is_automorphism_in_group(AutomorphismGroup *autogrp, partition *aut) {
+    for (int i = 0; i < autogrp->sz; ++i) {
+        if (partitions_are_equal(autogrp->automorphisms[i], aut)) return TRUE;
+    }
+    return FALSE;
+}
 
 
 static int _get_cell_start_by_value(partition* orbit, int value) {

@@ -46,7 +46,7 @@ typedef struct {
 
 
 
-void run(graph *g, int m, int n);
+void run(graph *g, int m, int n, boolean track_autos);
 
 partition* refine(graph *G, partition *pi, partition *active, int m, int n);
 

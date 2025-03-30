@@ -42,7 +42,7 @@ typedef struct
 #define FREEPATHNODE(name) \
     if(name) { \
         if (name->path) {FREES(name->path);} \
-        if (name->pi) {FREES(name->pi);} \
+        if (name->pi) {FREEPART(name->pi);} \
         FREES(name); \
         name=NULL; }
 

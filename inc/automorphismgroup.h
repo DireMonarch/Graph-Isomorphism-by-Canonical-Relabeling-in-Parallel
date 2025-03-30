@@ -32,6 +32,7 @@ typedef struct {
 
 void automorphisms_clear(AutomorphismGroup *autogrp);
 void automorphisms_append(AutomorphismGroup *autogrp, partition *aut);
+boolean is_automorphism_in_group(AutomorphismGroup *autogrp, partition *aut);
 void automorphisms_merge_perm_into_oribit(partition *permutation, partition* orbit);
 void automorphisms_calculate_mcr(partition *orbit, int *mcr, int *mcr_sz);
 

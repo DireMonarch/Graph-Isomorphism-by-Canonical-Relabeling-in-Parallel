@@ -18,7 +18,7 @@
 #define _PATH_H_
 
 #include "proto.h"
-
+#include "p_util.h"
 
 typedef struct {
     int *data;
@@ -39,6 +39,7 @@ typedef struct {
 
 
 void visualize_path(FILE *f, Path *path);
+Path* copy_path(Path *src);
 
 
 #endif /* _PATH_H_ */

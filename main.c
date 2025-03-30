@@ -47,7 +47,7 @@ int main( int argc, char **argv){
     // putam(stdout, g, 0, TRUE, FALSE, m, n);  /* visualizes graph */
 
 
-    run(g, m, n);
+    run(g, m, n, TRUE);
 
     
     // partition *src = generate_unit_partition(n);

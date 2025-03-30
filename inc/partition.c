@@ -34,6 +34,15 @@ partition* copy_partition(partition *src){
     return dst;
 }
 
+boolean partitions_are_equal(partition *a, partition *b) {
+    if (a->sz != b->sz) return FALSE;
+    for (int i = 0; i < a->sz; ++i) {
+        if (a->lab[i] != b->lab[i]) return FALSE;
+        if (a->ptn[i] != b->ptn[i]) return FALSE;
+    }
+    return TRUE;
+}
+
 
 void visualize_partition(FILE *f, partition *pi){
     int last_ptn = 0;

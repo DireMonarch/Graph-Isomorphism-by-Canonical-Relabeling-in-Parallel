@@ -64,6 +64,7 @@ typedef struct {
 
 
 partition* copy_partition(partition *src);
+boolean partitions_are_equal(partition *a, partition *b);
 void visualize_partition(FILE *f, partition *pi);
 void visualize_partition_with_char_offset(FILE *f, partition *pi, char offset);
 void visualize_partition_with_int_offset(FILE *f, partition *pi, int offset);
