@@ -40,7 +40,6 @@ typedef struct {
     int *ptn;               /* 0 or 1, 0 means index is end of cell, 1 means cell continues */
     size_t sz;              /* number of elements in lab and ptn */
     size_t allocated_sz;    /* originally allocated size DON'T UPDATE!!! */
-    int _ref_count;         /* Just used for counting references, as if I might decide to clean up evenetually */
 } partition;
 
 #define DYNALLOCPART(name,new_sz,msg) \
@@ -49,17 +48,14 @@ typedef struct {
     if ((name->lab=(int*)ALLOCS(new_sz,sizeof(int))) == NULL) {alloc_error(msg);} \
     if ((name->ptn=(int*)ALLOCS(new_sz,sizeof(int))) == NULL) {alloc_error(msg);} \
     name->sz = new_sz; \
-    name->allocated_sz = new_sz; \
-    name->_ref_count = 1;
+    name->allocated_sz = new_sz;
 
 #define FREEPART(name) \
     if(name) { \
-        name->_ref_count--; \
-        if(name->_ref_count < 1) { \
-            if (name->lab) {FREES(name->lab);} \
-            if (name->ptn) {FREES(name->ptn);} \
-            FREES(name); \
-            name=NULL; }}
+        if (name->lab) {FREES(name->lab);} \
+        if (name->ptn) {FREES(name->ptn);} \
+        FREES(name); \
+        name=NULL; }
 
 
 

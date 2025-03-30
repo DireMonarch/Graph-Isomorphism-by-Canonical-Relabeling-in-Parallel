@@ -41,8 +41,8 @@ typedef struct
 
 #define FREEPATHNODE(name) \
     if(name) { \
-        if (name->path) {FREEPATH(name->path);} \
-        if (name->pi) {FREEPART(name->pi);} \
+        FREEPATH(name->path); \
+        FREEPART(name->pi); \
         FREES(name); \
         name=NULL; }
 

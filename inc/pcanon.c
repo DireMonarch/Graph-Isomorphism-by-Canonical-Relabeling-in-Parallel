@@ -35,7 +35,7 @@ static partition* _refine_special(graph *g, partition *pi, partition *active, in
 
 void run(graph *g, int m, int n, boolean track_autos){
     BadStack *stack = malloc(sizeof(BadStack));    // Yep, it's bad
-    stack_initialize(stack, 200000);
+    stack_initialize(stack, 400);
 
     Status *status = (Status*)malloc(sizeof(Status));
     status->g = g;
@@ -137,8 +137,7 @@ static void _first_node(graph *g, int m, int n, BadStack *stack, Status *status)
             DYNALLOCPATHNODE(next, "process");
             DYNALLOCPATH(next->path, 1, "process");
             next->path->data[0] = new_pi->lab[i];
-            next->pi = new_pi;
-            new_pi->_ref_count++;  /* Doing this so we know how many references to this one partition exist, to keep cleanup safe */  /* Sure this'll really work */
+            next->pi = copy_partition(new_pi);
             stack_push(stack, next);
         }
     } else {
@@ -170,11 +169,10 @@ static void _process_leaf(Path *path, partition *pi, Status *status, boolean tra
         /* New best invariant found! */
         // printf("New CL: "); visualize_partition(DEBUGFILE, perm); printf("   partition: "); visualize_partition(DEBUGFILE, pi); ENDL();
         status->flag_new_cl = TRUE;
-        status->cl = perm;
-        status->cl_pi = pi;
-        status->cl_pi->_ref_count++;
-        status->best_invar = invar;
-        status->best_invar_path = copy_path(path);
+        FREEPART(status->cl);               status->cl = perm;
+        FREEPART(status->cl_pi);            status->cl_pi = copy_partition(pi);
+        FREES(status->best_invar);          status->best_invar = invar;
+        FREEPATH(status->best_invar_path);  status->best_invar_path = copy_path(path);
     } else if (cmp == 0 && track_autos) {
         /* automorphism found */
         partition *aut = generate_permutation(status->cl_pi, pi);
@@ -246,8 +244,7 @@ static void _process_next(graph *g, int m, int n, BadStack *stack, Status *statu
                     next->path->data[j] = node->path->data[j];
                 }
                 next->path->data[next->path->sz-1] = new_pi->lab[i];
-                next->pi = new_pi;
-                new_pi->_ref_count++;  /* Doing this so we know how many references to this one partition exist, to keep cleanup safe */  /* Sure this'll really work */
+                next->pi = copy_partition(new_pi);
                 stack_push(stack, next);
             } else {
                 if (__DEBUG_X__) {printf("X "); visualize_path(DEBUGFILE, node->path); printf(" Pruned %d from tree   pi: ", new_pi->lab[i]); visualize_partition(DEBUGFILE, node->pi); printf("  theta: "); visualize_partition(DEBUGFILE, status->theta);
@@ -255,7 +252,6 @@ static void _process_next(graph *g, int m, int n, BadStack *stack, Status *statu
             }
         }
     }
-    printf("%d\n", new_pi->_ref_count);
     FREEPART(new_pi);
     FREEPART(active);
     FREEPATHNODE(node);
@@ -332,6 +328,8 @@ partition* refine(graph *g, partition *pi, partition *active, int m, int n){
 
     }
     if (__DEBUG_R__) {printf("\n\nFinal pi_hat: "); visualize_partition(DEBUGFILE, pi_hat); ENDL();}
+    
+    FREEPART(alpha);
     return pi_hat;
 }
 

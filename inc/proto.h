@@ -75,7 +75,7 @@ static const setword bit[] =
 
 #define ALLOCS(x,y) malloc((size_t)(x)*(size_t)(y))
 #define REALLOCS(p,x) realloc(p,(size_t)(x)) 
-#define FREES(p) free(p)
+#define FREES(p) if (p) free(p)
 
 
 
