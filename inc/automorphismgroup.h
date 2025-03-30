@@ -50,7 +50,7 @@ void automorphisms_calculate_mcr(partition *orbit, int *mcr, int *mcr_sz);
 #define FREEAUTOGROUP(name) \
     if(name) { \
         automorphisms_clear(name); \
-        if (name->automorphisms) {FREES(name->automorphisms);} \
+        if (name->automorphisms) {for (int zzzzz = 0; zzzzz < name->sz; ++zzzzz) FREEPART(name->automorphisms[zzzzz]); FREES(name->automorphisms);} \
         FREEPART(name->theta); \
         if (name->mcr) {FREES(name->mcr);} \
         FREES(name); \

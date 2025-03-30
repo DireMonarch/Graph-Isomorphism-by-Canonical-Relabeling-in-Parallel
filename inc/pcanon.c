@@ -172,6 +172,7 @@ static void _process_leaf(Path *path, partition *pi, Status *status, boolean tra
         status->flag_new_cl = TRUE;
         status->cl = perm;
         status->cl_pi = pi;
+        status->cl_pi->_ref_count++;
         status->best_invar = invar;
         status->best_invar_path = copy_path(path);
     } else if (cmp == 0 && track_autos) {
@@ -220,7 +221,6 @@ static void _process_next(graph *g, int m, int n, BadStack *stack, Status *statu
     }
 
 
-
     /**
      * New partion means new work list, if it is not discrete
      */
@@ -255,6 +255,8 @@ static void _process_next(graph *g, int m, int n, BadStack *stack, Status *statu
             }
         }
     }
+    printf("%d\n", new_pi->_ref_count);
+    FREEPART(new_pi);
     FREEPART(active);
     FREEPATHNODE(node);
 }
