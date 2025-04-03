@@ -22,7 +22,8 @@
 #include "partition.h"
 #include "pathnode.h"
 #include "automorphismgroup.h"
-
+#include "badstack.h"
+#include "path.h"
 
 
 typedef struct {
@@ -42,14 +43,21 @@ typedef struct {
 
     boolean flag_new_cl;        /* Flag to indicate a new vest invariant found */
     boolean flag_new_auto;      /* Flag to indicate a new automorphism was found */
+
+    int refinement_count;       /* Used to track how many refinements are completed on this process */
 } Status;
 
 
 
+#ifdef MPI
+void run(graph *g, int m, int n, boolean track_autos, int argc, char** argv);
+#else /* if MPI */
 void run(graph *g, int m, int n, boolean track_autos);
+#endif /* if MPI */
 
 partition* refine(graph *G, partition *pi, partition *active, int m, int n);
 
+void mpi_handle_new_best_cononical_label(Status *status, Path *path, partition *pi);
 
 
 #endif /* _PCANNON_H_ */

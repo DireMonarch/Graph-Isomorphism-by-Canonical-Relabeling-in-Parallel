@@ -25,7 +25,6 @@ typedef struct
 {
     Path *path;     /* Node's Path from Root */
     partition *pi;  /* Node's Partition */
-    // partition *W;   /* Target Cell to explore - ptn 1 means open branch, 0 explored or pruned*/
 } PathNode;
 
 

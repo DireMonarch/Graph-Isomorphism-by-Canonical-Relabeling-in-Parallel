@@ -15,6 +15,7 @@
  */
 
 #include "util.h"
+#include <time.h>
 
 void deepcopy(int *src, int src_sz, int *dst, int *dst_sz){
     DYNALLOC1(int, dst, *dst_sz, src_sz, "deepcopy");
@@ -23,4 +24,20 @@ void deepcopy(int *src, int src_sz, int *dst, int *dst_sz){
         printf("\tcopying, i=%d    dst %d,  src %d\n", i, dst[i], src[i]);
     }
     printf("%d\n", dst[4]);
+}
+
+double wtime() {
+    /**
+     * wtime function used to generate a wall time, in seconds, similar to MPI_wtime()
+     * 
+     * Based entirely on the MPI_wtime implementation:
+     * https://github.com/open-mpi/ompi/blob/main/ompi/mpi/c/wtime.c
+     */
+
+    double wtime;
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
+    wtime  = (double)tp.tv_nsec/1.0e+9;
+    wtime += tp.tv_sec;
+    return wtime;
 }

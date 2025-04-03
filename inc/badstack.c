@@ -15,6 +15,7 @@
  */
 
 #include "badstack.h"
+#include "path.h"
 
 void stack_push(BadStack *stack, PathNode *node) {
     if (stack->sp < stack->allocated_sz-1) {  // sp is pointing to top element, not the space
@@ -57,4 +58,24 @@ void visualize_stack(FILE *f, BadStack *stack) {
     for (int i = stack->sp; i >= 0; --i) {
         fprintf(f, "\tpath: "); visualize_path(f, stack->_private[i]->path); fprintf(f, "  pi: "); visualize_partition(f, stack->_private[i]->pi); putc('\n', f);
     }
+}
+
+PathNode* stack_peek_at(BadStack *stack, int idx) {
+    if (idx > stack->sp) {printf("Index out of bounds peeking at stack location %d, stack is only %d", idx, stack->sp+1);  exit(0);}
+    return stack->_private[idx];
+}
+
+void delete_from_bottom_of_stack(BadStack * stack, int count) {
+    if (count > stack_size(stack)) {printf("Error:  trying to remove %d from stack, but only %d exist!\n", count, stack->sp); exit(1);}
+
+    /* first move all the remaining nodes to the new point on the stack */
+    for (int i = 0; i < stack_size(stack) - count; ++i) {
+        if (i < count) {
+            FREEPATHNODE(stack->_private[i]);               /* free memory, as this is a delete operation, but only if the stack location is less than count! */
+        }
+        stack->_private[i] = stack->_private[i+count];  /* move new pathnode to this location from higher on the stack */
+}
+
+    stack->sp -= count; /* set stack pointer to new top record on stack */
+
 }

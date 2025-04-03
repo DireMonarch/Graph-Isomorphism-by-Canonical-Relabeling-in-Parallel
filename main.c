@@ -46,8 +46,11 @@ int main( int argc, char **argv){
 
     // putam(stdout, g, 0, TRUE, FALSE, m, n);  /* visualizes graph */
 
-
+#ifdef MPI
+    run(g, m, n, TRUE, argc, argv);
+#else /* if MPI */
     run(g, m, n, TRUE);
+#endif /* if MPI */
 
     
     // partition *src = generate_unit_partition(n);

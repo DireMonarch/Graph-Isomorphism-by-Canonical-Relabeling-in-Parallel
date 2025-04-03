@@ -16,41 +16,50 @@
 
 
 
-CC		=	gcc
-
+GCC	=	gcc
+CC      =       /opt/ohpc/pub/mpi/openmpi3-gnu7/3.1.0/bin/mpicc
+CCLINK  =       /opt/ohpc/pub/mpi/openmpi3-gnu7/3.1.0/bin/mpicc
+SHELL   =       /bin/sh
 
 all: main
 
-main: main.c p_gtools.o util.o p_util.o partition.o pcanon.o badstack.o path.o automorphismgroup.o
-	# $(CC) main.c 
-	$(CC) main.c lib/p_gtools.o lib/p_util.o lib/util.o lib/partition.o lib/pcanon.o lib/badstack.o lib/path.o lib/automorphismgroup.o
 
-pcanon.o: inc/pcanon.c inc/pcanon.h
-	$(CC) -c inc/pcanon.c -o lib/pcanon.o
+main: main.c inc/p_gtools.o lib/util.o lib/p_util.o lib/partition.o pcanon.o lib/badstack.o lib/path.o lib/automorphismgroup.o
+	# $(GCC) main.c 
+	$(GCC) main.c lib/p_gtools.o lib/p_util.o lib/util.o lib/partition.o lib/pcanon.o lib/badstack.o lib/path.o lib/automorphismgroup.o
 
-p_gtools.o: inc/p_gtools.c inc/p_gtools.h p_util.o
-	$(CC) -c inc/p_gtools.c -o lib/p_gtools.o
+mpi: main.c lib/p_gtools.o lib/util.o lib/p_util.o lib/partition.o mpipcanon.o lib/badstack.o lib/path.o lib/automorphismgroup.o lib/mpi_routines.o
+	$(CC) -lm -o mpi -DMPI main.c lib/p_gtools.o lib/p_util.o lib/util.o lib/partition.o lib/mpipcanon.o lib/badstack.o lib/path.o lib/automorphismgroup.o lib/mpi_routines.o
 
-p_util.o: inc/p_util.c inc/p_util.h	
-	$(CC) -c inc/p_util.c  -o lib/p_util.o
+mpipcanon.o:
+	$(CC) -c  -lm  -DMPI inc/pcanon.c -o lib/mpipcanon.o
 
-util.o: inc/util.c inc/util.h	
-	$(CC) -c inc/util.c  -o lib/util.o	
+pcanon.o: 
+	$(GCC) -c inc/pcanon.c -o lib/pcanon.o
 
-partition.o: inc/partition.c inc/partition.h	
-	$(CC) -c inc/partition.c  -o lib/partition.o	
+lib/mpi_routines.o: inc/mpi_routines.c inc/mpi_routines.h
+	$(CC) -c -lm -DMPI inc/mpi_routines.c -o lib/mpi_routines.o
 
-badstack.o: inc/badstack.c inc/badstack.h	
-	$(CC) -c inc/badstack.c  -o lib/badstack.o
+lib/p_gtools.o: inc/p_gtools.c inc/p_gtools.h
+	$(GCC) -c inc/p_gtools.c -o lib/p_gtools.o
 
-path.o: inc/path.c inc/path.h	
-	$(CC) -c inc/path.c  -o lib/path.o	
+lib/p_util.o: inc/p_util.c inc/p_util.h	
+	$(GCC) -c inc/p_util.c  -o lib/p_util.o
 
-automorphismgroup.o: inc/automorphismgroup.c inc/automorphismgroup.h	
-	$(CC) -c inc/automorphismgroup.c  -o lib/automorphismgroup.o		
+lib/util.o: inc/util.c inc/util.h	
+	$(GCC) -c inc/util.c  -o lib/util.o	
 
-run: all
-	./a.out
+lib/partition.o: inc/partition.c inc/partition.h	
+	$(GCC) -c inc/partition.c  -o lib/partition.o	
+
+lib/badstack.o: inc/badstack.c inc/badstack.h	
+	$(GCC) -c inc/badstack.c  -o lib/badstack.o
+
+lib/path.o: inc/path.c inc/path.h	
+	$(GCC) -c inc/path.c  -o lib/path.o	
+
+lib/automorphismgroup.o: inc/automorphismgroup.c inc/automorphismgroup.h	
+	$(GCC) -c inc/automorphismgroup.c  -o lib/automorphismgroup.o		
 
 clean:
-	rm a.out lib/*.o
+	rm a.out lib/*.o mpi
