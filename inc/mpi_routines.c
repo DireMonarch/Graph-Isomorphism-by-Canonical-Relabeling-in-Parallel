@@ -193,6 +193,34 @@ void mpi_poll_for_messages (MPIState *mpi_state, BadStack *stack, Status *status
 
         case MPI_MSG_NEW_AUTO: {
             /* we receieved a new automorphism */
+
+            int msg_sz;
+            MPI_Get_count(&recv_status, MPI_INT, &msg_sz);
+            int *msg = (int*)malloc(sizeof(int)*msg_sz);    /* allocate space for message buffer */
+
+            MPI_Recv(msg, msg_sz, MPI_INT, recv_status.MPI_SOURCE, recv_status.MPI_TAG, MPI_COMM_WORLD, &recv_status);
+            if (__DEBUG_MPI__) printf("MPI: Process %d: received %d words from %d in MPI_MSG_NEW_AUTO \n",mpi_state->my_rank, msg_sz, recv_status.MPI_SOURCE);
+
+            int m = 0; /* variable used to walk through the message */
+
+            partition *pi;
+            DYNALLOCPART(pi, msg[m], "pi MPI_MSG_NEW_AUTO")        /* Allocat space for pi */
+            ++m;    /* need to pull this out ofhte DYNALLOCPART statement, as it would increment more than once */
+
+            /* extract partition lab form message */
+            for (int j = 0; j < pi->sz; ++j) {
+                pi->lab[j] = msg[m++];
+            }
+            /* extract partition ptn form message */
+            for (int j = 0; j < pi->sz; ++j) {
+                pi->ptn[j] = msg[m++];
+            }
+
+            /* pass ownership of pi (the automorphism) to the main function, don't free it here! */
+            mpi_handle_new_automorphism(status, pi);
+            
+            /* free memory */
+            free(msg);
             break;
             }            
 
@@ -481,12 +509,45 @@ void mpi_send_new_best_cl(MPIState *mpi_state, Status *status) {
     /** */
 
     MPI_Request request;
-    if (__DEBUG_MPI__) {printf("MPI: Process %d Broadcast New Best CL in %d words  ", mpi_state->my_rank, msg_sz); visualize_path(DEBUGFILE, status->best_invar_path); printf("  "); visualize_partition(DEBUGFILE, status->cl_pi); printf("  "); visualize_partition(DEBUGFILE, status->cl); ENDL();}
-
-    // if (__DEBUG_MPI__) printf("MPI: Process %d: broadcasting %d words for new best CL\n",mpi_state->my_rank, msg_sz);
+    if (__DEBUG_MPI__) {printf("MPI: Process: %d Broadcast New Best CL in %d words  ", mpi_state->my_rank, msg_sz); visualize_path(DEBUGFILE, status->best_invar_path); printf("  "); visualize_partition(DEBUGFILE, status->cl_pi); printf("  "); visualize_partition(DEBUGFILE, status->cl); ENDL();}
+    
+    /* we don't have a broadcast function that uses tags, so I'm brute forcing it. */
     for (int i = 0; i < mpi_state->num_processes; ++i) {
         if (i != mpi_state->my_rank) {
             MPI_Isend(msg, msg_sz, MPI_INT, i, MPI_MSG_NEW_CL, MPI_COMM_WORLD, &request);
+        }
+    }
+}
+
+void mpi_send_new_automorphism(MPIState *mpi_state, Status *status, partition *aut) {
+
+    int msg_sz = 1;  /* start with 2 for the partition size variable */
+
+    msg_sz += (aut->sz) * 2;     /* add 2 x the partition size (once for each array )*/
+
+    int *msg = (int*)malloc(sizeof(int)*msg_sz);   /* allocate message buffer */
+
+    int m = 0;  /* variable to be used as the message index */
+    
+    /** Add the parition (aut) to the message */
+    msg[m++] = aut->sz;                        /* set the next word to the size of the partion pi */
+    /* loop through the partition and put the lab words into the message */
+    for (int j = 0; j < aut->sz; ++j) {
+        msg[m++] = aut->lab[j];
+    }
+    /* loop through the partition and put the ptn words into the message */
+    for (int j = 0; j < aut->sz; ++j) {
+        msg[m++] = aut->ptn[j];
+    }
+    /** */
+
+    MPI_Request request;
+    if (__DEBUG_MPI__) {printf("MPI: Process %d: Broadcast New Automorphism in %d words  ", mpi_state->my_rank, msg_sz); visualize_partition(DEBUGFILE, aut); ENDL();}
+    
+    /* we don't have a broadcast function that uses tags, so I'm brute forcing it. */
+    for (int i = 0; i < mpi_state->num_processes; ++i) {
+        if (i != mpi_state->my_rank) {
+            MPI_Isend(msg, msg_sz, MPI_INT, i, MPI_MSG_NEW_AUTO, MPI_COMM_WORLD, &request);
         }
     }
 }

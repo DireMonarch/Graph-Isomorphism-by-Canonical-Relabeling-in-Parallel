@@ -58,6 +58,6 @@ void run(graph *g, int m, int n, boolean track_autos);
 partition* refine(graph *G, partition *pi, partition *active, int m, int n);
 
 void mpi_handle_new_best_cononical_label(Status *status, Path *path, partition *pi);
-
+void mpi_handle_new_automorphism(Status *status, partition *aut);
 
 #endif /* _PCANNON_H_ */

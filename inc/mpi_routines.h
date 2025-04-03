@@ -64,5 +64,6 @@ void mpi_ask_for_work(MPIState *mpi_state, BadStack *stack, Status *status);
 void mpi_query_work_end(MPIState *mpi_state, BadStack *stack, Status *status);
 void mpi_idle(MPIState *mpi_state, BadStack *stack, Status *status);
 void mpi_send_new_best_cl(MPIState *mpi_state, Status *status);
+void mpi_send_new_automorphism(MPIState *mpi_state, Status *status, partition *aut);
 
 #endif /* _MPI_ROUTINES_H_ */

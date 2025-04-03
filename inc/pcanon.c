@@ -135,7 +135,7 @@ void run(graph *g, int m, int n, boolean track_autos)
 
             #ifdef MPI
             /* Send message to other processes*/
-            printf("*MPI: Process %d Communicate New Auto  ", mpi_state.my_rank); visualize_partition(DEBUGFILE, aut); ENDL();
+            mpi_send_new_automorphism(&mpi_state, status, aut);
             #endif /* if MPI */
         } 
         #ifdef MPI
@@ -216,7 +216,6 @@ void run(graph *g, int m, int n, boolean track_autos)
     printf("Serial Runtime: %f\n\n", wtime() - start_time);
 
     #endif /* if MPI */
-
     /** Free allocated memory */
     free(stack);
     FREES(status->theta);
@@ -303,6 +302,19 @@ void mpi_handle_new_best_cononical_label(Status *status, Path *path, partition *
         /* if we don't accept this new CL as best, then we need to free the perm and invar we created */
         FREEPART(perm);
         FREES(invar);
+    }
+}
+
+/**
+ * This function handles the work to process a new automorphism received from MPI
+ * 
+ * This function MUST take ownership of the aut variable passed in!
+ */
+void mpi_handle_new_automorphism(Status *status, partition *aut) {
+    if (!is_automorphism_in_group(status->autogrp, aut)) {
+        automorphisms_append(status->autogrp, aut);
+        automorphisms_merge_perm_into_oribit(aut, status->theta);
+        automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);
     }
 }
 #endif /* if MPI */

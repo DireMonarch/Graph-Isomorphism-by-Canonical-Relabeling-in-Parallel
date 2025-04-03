@@ -18,9 +18,9 @@
 #define _PROTO_H_
 
 /* this is here just so the editor shows the MPI code */
-// #ifndef MPI
-// #define MPI
-// #endif /* if MPI */
+#ifndef MPI
+#define MPI
+#endif /* if MPI */
 
 #include <stdlib.h>
 #include <stdio.h>
