@@ -41,3 +41,7 @@ double wtime() {
     wtime += tp.tv_sec;
     return wtime;
 }
+
+void get_timespec(struct timespec *tp) {
+    clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
+}

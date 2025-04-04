@@ -16,7 +16,6 @@
 
 #include "mpi_routines.h"
 
-#define __DEBUG_MPI__ TRUE
 
 /**
  * This function polls for general messages coming from other processes
@@ -92,9 +91,7 @@ void mpi_poll_for_messages (MPIState *mpi_state, BadStack *stack, Status *status
                         }
                         /** */
                     }
-                    printf("pre delete %d\n", stack_size(stack));
                     delete_from_bottom_of_stack(stack, send_sz);    /* once we make the message to send, we delete the entries from the stack */
-                    printf("post delete %d\n", stack_size(stack));
 
                     if (__DEBUG_MPI__) printf("MPI: Process %d: about to send %d nodes (%d words) to %d in NEED_WORK\n",mpi_state->my_rank, send_sz, buff_sz, recv_status.MPI_SOURCE);
                     MPI_Send( msg, buff_sz, MPI_INT, recv_status.MPI_SOURCE, MPI_MSG_TAKE_WORK, MPI_COMM_WORLD);

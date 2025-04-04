@@ -21,7 +21,7 @@ CC      =       /opt/ohpc/pub/mpi/openmpi3-gnu7/3.1.0/bin/mpicc
 CCLINK  =       /opt/ohpc/pub/mpi/openmpi3-gnu7/3.1.0/bin/mpicc
 SHELL   =       /bin/sh
 
-all: main
+all: main mpi
 
 
 main: main.c inc/p_gtools.o lib/util.o lib/p_util.o lib/partition.o pcanon.o lib/badstack.o lib/path.o lib/automorphismgroup.o

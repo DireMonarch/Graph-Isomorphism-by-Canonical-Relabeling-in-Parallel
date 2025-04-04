@@ -36,7 +36,7 @@ int main( int argc, char **argv){
     char * infilename = argv[1];
 
     infile = opengraphfile(infilename,&codetype,FALSE,1);
-    if (codetype != GRAPH6){
+    if (codetype != GRAPH6 && codetype != (GRAPH6+HAS_HEADER)){
         printf("Unsupported graph type %d encoutered.", codetype);
         exit(-1);
     }
@@ -47,9 +47,9 @@ int main( int argc, char **argv){
     // putam(stdout, g, 0, TRUE, FALSE, m, n);  /* visualizes graph */
 
 #ifdef MPI
-    run(g, m, n, TRUE, argc, argv);
+    run(g, m, n, TRUE, infilename,  argc, argv);
 #else /* if MPI */
-    run(g, m, n, TRUE);
+    run(g, m, n, TRUE, infilename);
 #endif /* if MPI */
 
     

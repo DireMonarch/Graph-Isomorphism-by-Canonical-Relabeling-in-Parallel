@@ -50,9 +50,9 @@ typedef struct {
 
 
 #ifdef MPI
-void run(graph *g, int m, int n, boolean track_autos, int argc, char** argv);
+void run(graph *g, int m, int n, boolean track_autos, char* infilename, int argc, char** argv);
 #else /* if MPI */
-void run(graph *g, int m, int n, boolean track_autos);
+void run(graph *g, int m, int n, boolean track_autos, char* infilename);
 #endif /* if MPI */
 
 partition* refine(graph *G, partition *pi, partition *active, int m, int n);

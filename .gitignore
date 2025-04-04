@@ -9,6 +9,9 @@ lib/
 # VSCode
 .vscode
 
+#python
+.venv/
+
 # Prerequisites
 *.d
 

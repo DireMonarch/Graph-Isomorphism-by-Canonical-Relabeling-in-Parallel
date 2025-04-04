@@ -15,13 +15,14 @@
  */
 
 #include "pcanon.h"
+#include <time.h>
 
 #ifdef MPI
-#include <time.h>
 #include "mpi.h"
 #include "mpi_routines.h"
 #endif /* if MPI */
 
+#define LOGFILE "testlog.csv"
 
 #define __DEBUG_R__ FALSE   /* debug refiner */
 #define __DEBUG_RS__ FALSE   /* debug special refiner */
@@ -39,17 +40,17 @@ static void _first_node(graph *g, int m, int n, BadStack *stack, Status *status)
 static void _process_leaf(Path *path, partition *pi, Status *status, boolean track_autos);
 static void _process_next(graph *g, int m, int n, BadStack *stack, Status *status, boolean track_autos);
 static partition* _refine_special(graph *g, partition *pi, partition *active, int m, int n);
+static void log_output_to_file(char *filename, int refines, int auto_sz, double runtime, int num_procs);
 
 
 #ifdef MPI 
 NORET_ATTR
-void run(graph *g, int m, int n, boolean track_autos, int argc, char** argv)
+void run(graph *g, int m, int n, boolean track_autos, char* infilename, int argc, char** argv)
 #else /* if MPI */
 NORET_ATTR
-void run(graph *g, int m, int n, boolean track_autos)
+void run(graph *g, int m, int n, boolean track_autos, char* infilename)
 #endif /* if MPI */
 {
-    // erdosh reney
     #ifdef MPI
     /** Set up MPI */   
     MPIState mpi_state;
@@ -103,11 +104,11 @@ void run(graph *g, int m, int n, boolean track_autos)
     
     #ifdef MPI
     if (mpi_state.my_rank == 0) {
-        printf("Graph Loaded - M: %d   N: %d\n", m, n);
+        printf("Graph Loaded - M: %d   N: %d\n\n", m, n);
         _first_node(g, m, n, stack, status);    /* run against first node, which will create the node and push to the stack, for MPI, only run this on rank 0 process */
     } 
     #else /* if MPI */
-    printf("Graph Loaded - M: %d   N: %d\n", m, n);
+    printf("Graph Loaded - M: %d   N: %d\n\n", m, n);
     _first_node(g, m, n, stack, status);    /* run against first node, which will create the node and push to the stack */
     #endif /*if MPI */
 
@@ -147,9 +148,12 @@ void run(graph *g, int m, int n, boolean track_autos)
         #endif /* if MPI */
 
         #ifdef MPI
-        if (__DEBUG_PROGRESS__ && status->refinement_count %__DEBUG_PROGRESS__ == 0) printf("\nProcess %d Nodes Processed : %d  stack:  %d/%d\n", mpi_state.my_rank, status->refinement_count, stack->sp, stack->allocated_sz);
+        if (__DEBUG_PROGRESS__ && status->refinement_count %__DEBUG_PROGRESS__ == 0) {
+            if (mpi_state.my_rank == 0) printf("\n");
+            printf("Process %d Nodes Processed : %d  stack:  %d/%d\n", mpi_state.my_rank, status->refinement_count, stack->sp, stack->allocated_sz);
+        }
         #else /* if MPI */
-        if (__DEBUG_PROGRESS__ && status->refinement_count %__DEBUG_PROGRESS__ == 0) printf("\nNodes Processed : %d  stack:  %d/%d\n", status->refinement_count, stack->sp, stack->allocated_sz);
+        if (__DEBUG_PROGRESS__ && status->refinement_count %__DEBUG_PROGRESS__ == 0) printf("Nodes Processed : %d  stack:  %d/%d\n", status->refinement_count, stack->sp, stack->allocated_sz);
         #endif /* if MPI */
     
         #ifdef MPI
@@ -180,13 +184,17 @@ void run(graph *g, int m, int n, boolean track_autos)
 
     /* cleanup and reporting */
     #ifdef MPI
+    
+    printf("Process %d refines: %d\n", mpi_state.my_rank, status->refinement_count);
+    
     /* Need statistics colleciton and shutdown stuff here */
     int total_refines;
     MPI_Reduce(&status->refinement_count, &total_refines, 1, MPI_INT,MPI_SUM, 0, MPI_COMM_WORLD);
     
-    printf("Process %d refines: %d\n", mpi_state.my_rank, status->refinement_count);
-
     if (mpi_state.my_rank == 0) {
+        double runtime = MPI_Wtime() - start_time;
+        printf("\nParallel Runtime: %f\n\n", runtime);
+
         printf("\nTotal Refinements : %d\n", total_refines);
 
         printf("Canonical Label: "); visualize_partition(DEBUGFILE, status->cl); ENDL();
@@ -195,8 +203,9 @@ void run(graph *g, int m, int n, boolean track_autos)
             printf("Automorphism: "); visualize_partition(DEBUGFILE, status->autogrp->automorphisms[i]); ENDL();
         }
 
-        printf("Parallel Runtime: %f\n\n", MPI_Wtime() - start_time);
-    } else {
+        log_output_to_file(infilename, total_refines, status->autogrp->sz, runtime, mpi_state.num_processes);
+
+    } else if (__DEBUG_MPI__) {
         /* temporary for testing */
         if (status->cl){
             printf("Process %d final Canonical Label: ", mpi_state.my_rank); visualize_partition(DEBUGFILE, status->cl); ENDL();
@@ -206,6 +215,9 @@ void run(graph *g, int m, int n, boolean track_autos)
         
     }
     #else /* if MPI */
+    double runtime = wtime() - start_time;
+    printf("\nSerial Runtime: %f\n\n", runtime);
+
     printf("\nTotal Refinements : %d\n", status->refinement_count);
 
     printf("Canonical Label: "); visualize_partition(DEBUGFILE, status->cl); ENDL();
@@ -213,7 +225,9 @@ void run(graph *g, int m, int n, boolean track_autos)
     for (int i = 0; i < status->autogrp->sz; ++i) {
         printf("Automorphism: "); visualize_partition(DEBUGFILE, status->autogrp->automorphisms[i]); ENDL();
     }
-    printf("Serial Runtime: %f\n\n", wtime() - start_time);
+
+    log_output_to_file(infilename, status->refinement_count, status->autogrp->sz, runtime, -1);
+
 
     #endif /* if MPI */
     /** Free allocated memory */
@@ -229,7 +243,7 @@ void run(graph *g, int m, int n, boolean track_autos)
 
 #ifdef MPI
     /** Shut down MPI and exit */
-    printf("MPI process %d shutting down normally\n", mpi_state.my_rank);
+    if (__DEBUG_MPI__) printf("MPI process %d shutting down normally\n", mpi_state.my_rank);
     MPI_Finalize();
     /** */
 #endif /* if MPI */
@@ -642,4 +656,25 @@ static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int c
     }
 
     FREEPART(cell_sort);
+}
+
+
+static void log_output_to_file(char *filename, int refines, int auto_sz, double runtime, int num_procs) {
+    struct timespec ts;
+    // get_timespec(&ts);
+    clock_gettime(CLOCK_REALTIME, &ts);
+    char buff[100];
+    struct tm tm;
+    gmtime_r(&ts.tv_sec, &tm);
+    strftime(buff, 75, "%Y-%m-%d %H:%M:%S UTC", &tm);
+    
+    FILE *outfile; /* File Pointer for output */
+    /* output execution time to file */
+    outfile = fopen(LOGFILE, "a");
+    if (num_procs < 0) {
+        fprintf(outfile, "%s, %s, SERIAL, %d, %d, %f, 1\n", buff, filename, refines, auto_sz, runtime);
+    } else {
+        fprintf(outfile, "%s, %s, PARALLEL, %d, %d, %f, %d\n", buff, filename, refines, auto_sz, runtime, num_procs);
+    }
+    fclose(outfile);
 }

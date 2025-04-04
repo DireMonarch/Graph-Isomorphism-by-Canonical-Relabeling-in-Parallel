@@ -21,6 +21,9 @@
 #include "proto.h"
 #include "mpi.h"
 
+#define __DEBUG_MPI__ FALSE
+
+
 #define MPI_CONST_SEND_WORK_CUTOFF_DEPTH 3
 #define MPI_CONST_MAX_WORK_SIZE_TO_SEND 10
 #define MPI_CONST_IDLE_WAIT_TIME_IN_SECONDS 1.0

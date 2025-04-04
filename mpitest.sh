@@ -1,3 +1,3 @@
 #! /bin/bash
 
-mpirun -n 4 ./mpi $1
+mpirun -n 8 ./mpi $1
