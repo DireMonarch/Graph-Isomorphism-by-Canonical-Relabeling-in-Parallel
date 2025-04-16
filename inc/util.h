@@ -21,5 +21,7 @@
 #include "p_util.h"
 
 void deepcopy(int *src, int src_sz, int *dst, int *dst_sz);
+double wtime();
+void get_timespec(struct timespec *tp);
 
 #endif /* _UTIL_H_ */

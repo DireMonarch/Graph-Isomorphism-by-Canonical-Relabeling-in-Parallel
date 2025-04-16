@@ -15,8 +15,14 @@
  */
 
 #include "pcanon.h"
-#include "badstack.h"
-#include "path.h"
+#include <time.h>
+
+#ifdef MPI
+#include "mpi.h"
+#include "mpi_routines.h"
+#endif /* if MPI */
+
+#define LOGFILE "testlog.csv"
 
 #define __DEBUG_R__ FALSE   /* debug refiner */
 #define __DEBUG_RS__ FALSE   /* debug special refiner */
@@ -25,6 +31,8 @@
 #define __DEBUG_P__ FALSE  /* debug node process events */
 #define __DEBUG_X__ FALSE  /* debug prune events */
 
+#define __DEBUG_PROGRESS__ 10000 /* show progress every X nodes processed, set to zero to disable */
+
 
 static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int cell_sz, partition *alpha, int scope_idx, int scope_sz, int m, int n);
 static int _target_cell(partition *pi);
@@ -32,74 +40,185 @@ static void _first_node(graph *g, int m, int n, BadStack *stack, Status *status)
 static void _process_leaf(Path *path, partition *pi, Status *status, boolean track_autos);
 static void _process_next(graph *g, int m, int n, BadStack *stack, Status *status, boolean track_autos);
 static partition* _refine_special(graph *g, partition *pi, partition *active, int m, int n);
+static void log_output_to_file(char *filename, int refines, int auto_sz, double runtime, int num_procs);
 
-void run(graph *g, int m, int n, boolean track_autos){
+
+#ifdef MPI 
+NORET_ATTR
+void run(graph *g, int m, int n, boolean track_autos, char* infilename, int argc, char** argv)
+#else /* if MPI */
+NORET_ATTR
+void run(graph *g, int m, int n, boolean track_autos, char* infilename)
+#endif /* if MPI */
+{
+    #ifdef MPI
+    /** Set up MPI */   
+    MPIState mpi_state;
+    MPI_Init(&argc, &argv);  /* Initialize MPI */
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpi_state.my_rank);  /* Fetch rank */
+    MPI_Comm_size(MPI_COMM_WORLD, &mpi_state.num_processes);  /* Fetch number of processes */
+
+    if (mpi_state.my_rank == 0) printf("MPI Active with %d processes\n\n", mpi_state.num_processes);
+    
+    srand(time(NULL));  /* seed the random number generator, will be used to pick a processor to ask for work */
+    /** */
+
+    double start_time = MPI_Wtime();  /* mark start time */
+
+    #else /* if MPI */
+    printf("MPI Not active, running standalone\n\n");
+    double start_time = wtime();  /* mark start time */
+    #endif /* if MPI */
+
     BadStack *stack = malloc(sizeof(BadStack));    // Yep, it's bad
-    stack_initialize(stack, 400);
+    stack_initialize(stack, 200); /* Not sure if n is the best answer, but it seems reasonable */
 
+    /* Initialize status tracking struct.  in MPI each process tracks its own status */
     Status *status = (Status*)malloc(sizeof(Status));
-    status->g = g;
-    status->m = m;
-    status->n = n;
-    status->cl = NULL;
-    status->cl_pi = NULL;
-    status->best_invar = NULL;
-    status->best_invar_path = NULL;
+    status->g = g;                      /* The graph we are operating on */
+    status->m = m;                      /* m is width in words for each graph adjacency matrix line */
+    status->n = n;                      /* n is the number of vertices, also the number of rows in the adjacency matrix */
+    status->cl = NULL;                  /* current best canonical label, NULL means we haven't found one yet */
+    status->cl_pi = NULL;               /* The partition that generated the current CL */
+    status->best_invar = NULL;          /* The invariant based on the current CL.  We use this at every leaf node, so we don't want to regenrate every leaf note*/
+    status->best_invar_path = NULL;     /* The tree path the current invariant was generated at */
 
     /* build theta and mcr */
-    status->theta = generate_unit_partition(n);
+    status->theta = generate_unit_partition(n); /* theta is orbit of the automorphism group */
     for (int i = 0; i < status->theta->sz; ++i) status->theta->ptn[i] = 0; /* theta starts off discrete */
-    status->mcr = (int*)malloc(sizeof(int)*n);
-    automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);
+    status->mcr = (int*)malloc(sizeof(int)*n);  /* mcr is Minimum Cell Representation of theta, this is what is used for pruning */
+    automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);  /* calculate initial mcr, which will be all vertices */
     
-    DYNALLOCAUTOGROUP(status->autogrp, n, n, "run_dyn_autogrp");
+    DYNALLOCAUTOGROUP(status->autogrp, n, n, "run_dyn_autogrp");  /* allocate space for the automorphism group, probably don't need size n here */
 
-    status->flag_new_cl = FALSE;
-    status->flag_new_auto = FALSE;
+    status->flag_new_cl = FALSE;        /* used for return values, will be TRUE after _process_next if a better CL was found */
+    status->flag_new_auto = FALSE;      /* used for return values, will be TRUE after _process_next if a new automorphism was found */
     
-    DYNALLOCPART(status->base_pi, n, "run_status_malloc");
-    for(int i = 0; i < n; ++i) {
+    DYNALLOCPART(status->base_pi, n, "run_status_malloc");  /* allocate memory for the base graph's discrete parition, used to generate permutation for leaf nodes */
+    for(int i = 0; i < n; ++i) {                            /* initialize the base partition.  Once again, it's used a lot, so make it once and store */
         status->base_pi->lab[i] = i;
         status->base_pi->ptn[i] = 0;
     }
 
-    int nodes_processed = 0;
-    printf("M: %d   N: %d\n", m, n);
-    _first_node(g, m, n, stack, status);
+    status->refinement_count = 0;       /* used to track how many refinements have been completed on this process */
+    
+    #ifdef MPI
+    if (mpi_state.my_rank == 0) {
+        printf("Graph Loaded - M: %d   N: %d\n\n", m, n);
+        _first_node(g, m, n, stack, status);    /* run against first node, which will create the node and push to the stack, for MPI, only run this on rank 0 process */
+    } 
+    #else /* if MPI */
+    printf("Graph Loaded - M: %d   N: %d\n\n", m, n);
+    _first_node(g, m, n, stack, status);    /* run against first node, which will create the node and push to the stack */
+    #endif /*if MPI */
 
+    #ifdef MPI
+    int last_comm_check = 0;
+    mpi_state.state = MPI_STATE_WORKING;
+    
+    /** This is a special loop for MPI, as if the queue goes empty, we aren't done, we need to ask for more work */
+    while (mpi_state.state == MPI_STATE_WORKING || mpi_state.state == MPI_STATE_ASKING_FOR_WORK) {
+    #endif /* if MPI */
+
+    /* main loop.  So long as there's something on the stack, keep on going! */
     while(stack_size(stack) > 0) {
-        status->flag_new_cl = FALSE;
-        status->flag_new_auto = FALSE;
-        _process_next(g, m, n, stack, status, track_autos);
-        if (status->flag_new_cl) {
-            printf("MPI: Communicate New Best CL  "); visualize_partition(DEBUGFILE, status->cl_pi); printf("  "); visualize_partition(DEBUGFILE, status->cl); ENDL();
-            /* stuff goes here */
-        } else if (status->flag_new_auto) {
+        status->flag_new_cl = FALSE;    /* reset status flags */
+        status->flag_new_auto = FALSE;  /* reset status flags */
+        _process_next(g, m, n, stack, status, track_autos); /* process the next node on the stack */
+
+        if (status->flag_new_auto) {
+            /* New automorphism found */
+
+            /* process automorphism locally */
             partition *aut = status->autogrp->automorphisms[status->autogrp->sz-1];
-            printf("MPI: Communicate New Auto  "); visualize_partition(DEBUGFILE, aut); ENDL();
             automorphisms_merge_perm_into_oribit(aut, status->theta);
             automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);
 
-            printf("Theta: "); visualize_partition(DEBUGFILE, status->theta); printf("  MCR (%d): ", status->mcr_sz);
-            for (int i = 0; i < status->mcr_sz; ++i) {
-                printf(" %d", status->mcr[i]);
-            }
-            ENDL();
-            /* stuff goes here too! */
+            #ifdef MPI
+            /* Send message to other processes*/
+            mpi_send_new_automorphism(&mpi_state, status, aut);
+            #endif /* if MPI */
+        } 
+        #ifdef MPI
+        /* if we are running MPI, then we are interested in sending new CL messages*/
+        else if (status->flag_new_cl) {
+            /* Send message to other processes*/
+            mpi_send_new_best_cl(&mpi_state, status);
         }
-        ++nodes_processed;
-        // if (nodes_processed > 5) exit(0);
-        if (nodes_processed %10000 == 0) printf("\nNodes Processed : %d  stack:  %d\n", nodes_processed, stack->sp);
+        #endif /* if MPI */
 
+        #ifdef MPI
+        if (__DEBUG_PROGRESS__ && status->refinement_count %__DEBUG_PROGRESS__ == 0) {
+            if (mpi_state.my_rank == 0) printf("\n");
+            printf("Process %d Nodes Processed : %d  stack:  %d/%d\n", mpi_state.my_rank, status->refinement_count, stack->sp, stack->allocated_sz);
+        }
+        #else /* if MPI */
+        if (__DEBUG_PROGRESS__ && status->refinement_count %__DEBUG_PROGRESS__ == 0) printf("Nodes Processed : %d  stack:  %d/%d\n", status->refinement_count, stack->sp, stack->allocated_sz);
+        #endif /* if MPI */
+    
+        #ifdef MPI
+        if (status->refinement_count > last_comm_check + MPI_NODES_BETWEEN_COMM_POLLS) {
+            last_comm_check = status->refinement_count;
+            mpi_poll_for_messages(&mpi_state, stack, status);
+        }
+        #endif /* if MPI */
     }
 
+    #ifdef MPI
+        /* We are here, and out of work, need to ask for more */
+        mpi_ask_for_work(&mpi_state, stack, status);
 
-    /*  Bridges  at Pitsburgh super computer center PSC */
-    /**
-     * IPDPS  - October 2025 submission deadline
-     */
+        /* need to do work end testing here */
+        if (mpi_state.state == MPI_STATE_QUERY_WORK_END) {
+            mpi_query_work_end(&mpi_state, stack, status);
+        } 
+    } /* while (mpi_state.state == MPI_STATE_WORKING || mpi_state.state == MPI_STATE_ASKING_FOR_WORK) */
+    
+    /* safety check that we are actually in work end state */
+    if (mpi_state.state != MPI_STATE_WORK_END) {
+        /* if we are in the wrong state, print error message and exit with a non zero state, so we don't miss the error */
+        printf("MPI: Process %d: Fell out of the main work loop while not in MPI_STATE_WORK_END state, in state is %d\n", mpi_state.state);
+        exit(1);
+    }
+    #endif /* if MPI */
 
-    printf("\nNodes Processed : %d\n", nodes_processed);
+    /* cleanup and reporting */
+    #ifdef MPI
+    
+    printf("Process %d refines: %d\n", mpi_state.my_rank, status->refinement_count);
+    
+    /* Need statistics colleciton and shutdown stuff here */
+    int total_refines;
+    MPI_Reduce(&status->refinement_count, &total_refines, 1, MPI_INT,MPI_SUM, 0, MPI_COMM_WORLD);
+    
+    if (mpi_state.my_rank == 0) {
+        double runtime = MPI_Wtime() - start_time;
+        printf("\nParallel Runtime: %f\n\n", runtime);
+
+        printf("\nTotal Refinements : %d\n", total_refines);
+
+        printf("Canonical Label: "); visualize_partition(DEBUGFILE, status->cl); ENDL();
+        
+        for (int i = 0; i < status->autogrp->sz; ++i) {
+            printf("Automorphism: "); visualize_partition(DEBUGFILE, status->autogrp->automorphisms[i]); ENDL();
+        }
+
+        log_output_to_file(infilename, total_refines, status->autogrp->sz, runtime, mpi_state.num_processes);
+
+    } else if (__DEBUG_MPI__) {
+        /* temporary for testing */
+        if (status->cl){
+            printf("Process %d final Canonical Label: ", mpi_state.my_rank); visualize_partition(DEBUGFILE, status->cl); ENDL();
+        } else {
+            printf("Process %d final Canonical Label: NA\n", mpi_state.my_rank);
+        }
+        
+    }
+    #else /* if MPI */
+    double runtime = wtime() - start_time;
+    printf("\nSerial Runtime: %f\n\n", runtime);
+
+    printf("\nTotal Refinements : %d\n", status->refinement_count);
 
     printf("Canonical Label: "); visualize_partition(DEBUGFILE, status->cl); ENDL();
     
@@ -107,6 +226,11 @@ void run(graph *g, int m, int n, boolean track_autos){
         printf("Automorphism: "); visualize_partition(DEBUGFILE, status->autogrp->automorphisms[i]); ENDL();
     }
 
+    log_output_to_file(infilename, status->refinement_count, status->autogrp->sz, runtime, -1);
+
+
+    #endif /* if MPI */
+    /** Free allocated memory */
     free(stack);
     FREES(status->theta);
     if (status->mcr) free(status->mcr);
@@ -115,9 +239,17 @@ void run(graph *g, int m, int n, boolean track_autos){
     if(status->best_invar) free(status->best_invar);
     FREEPATH(status->best_invar_path);
     free(status);
+    /** */
 
+#ifdef MPI
+    /** Shut down MPI and exit */
+    if (__DEBUG_MPI__) printf("MPI process %d shutting down normally\n", mpi_state.my_rank);
+    MPI_Finalize();
+    /** */
+#endif /* if MPI */
+
+    exit(0);
 }
-
 
 
 static void _first_node(graph *g, int m, int n, BadStack *stack, Status *status) {
@@ -125,9 +257,8 @@ static void _first_node(graph *g, int m, int n, BadStack *stack, Status *status)
     partition *pi = generate_unit_partition(n);
     partition *active = generate_unit_partition(n);
     partition *new_pi = refine(g, pi, active, m, n);
-    // visualize_partition(DEBUGFILE, pi); ENDL();
-    // visualize_partition(DEBUGFILE, active); ENDL();
-    // visualize_partition(DEBUGFILE, new_pi); ENDL();
+    status->refinement_count++; /* increment refinement variable, as we've executed a refinement */
+
     if (!is_partition_discrete(new_pi)) {
         /* if it is not discrete, add the child nodes, in proper order to the stack */
         int cell, cell_sz;
@@ -151,6 +282,57 @@ static void _first_node(graph *g, int m, int n, BadStack *stack, Status *status)
     FREEPART(pi);
 }
 
+#ifdef MPI
+/**
+ * This function handles the work to update the cl and best_invar after receiving a new best CL from MPI
+ * 
+ * This function does NOT take ownership of the path or pi variables passed in, they need to be freed by the current owner!
+ */
+void mpi_handle_new_best_cononical_label(Status *status, Path *path, partition *pi) {
+    int cmp = 0;  /* used to compare new node with best invariant <1 is better (new CL), 0 is equiv (auto if leaf), >1 worse (throw away)*/
+
+    partition *perm = generate_permutation(status->base_pi, pi);
+
+    graph *invar = calculate_invariant(status->g, status->m, status->n, perm);
+    if (status->best_invar == NULL) {
+        cmp = -1;
+    } else {
+        cmp = compare_invariants(status->best_invar, invar, status->m, status->n);
+    }
+    /**
+     *  Verify this reported new best CL is indeed better than what we have.
+     * 
+     * This is a parallel implementation, it is plausible that we found a better CL, 
+     * and have communicated it already before receiving this one, and need to keep it.
+     * 
+     * This should mirror the cmp < 0 block in _process_leaf
+     */
+    if (cmp < 0) {
+        FREEPART(status->cl);               status->cl = perm;                          /* passing ownership of perm to status */
+        FREEPART(status->cl_pi);            status->cl_pi = copy_partition(pi);
+        FREES(status->best_invar);          status->best_invar = invar;                 /* passing ownership of invar to status */
+        FREEPATH(status->best_invar_path);  status->best_invar_path = copy_path(path);    
+    } else {
+        /* if we don't accept this new CL as best, then we need to free the perm and invar we created */
+        FREEPART(perm);
+        FREES(invar);
+    }
+}
+
+/**
+ * This function handles the work to process a new automorphism received from MPI
+ * 
+ * This function MUST take ownership of the aut variable passed in!
+ */
+void mpi_handle_new_automorphism(Status *status, partition *aut) {
+    if (!is_automorphism_in_group(status->autogrp, aut)) {
+        automorphisms_append(status->autogrp, aut);
+        automorphisms_merge_perm_into_oribit(aut, status->theta);
+        automorphisms_calculate_mcr(status->theta, status->mcr, &status->mcr_sz);
+    }
+}
+#endif /* if MPI */
+
 static void _process_leaf(Path *path, partition *pi, Status *status, boolean track_autos) {
     int cmp = 0;  /* used to compare new node with best invariant <1 is better (new CL), 0 is equiv (auto if leaf), >1 worse (throw away)*/
 
@@ -166,8 +348,7 @@ static void _process_leaf(Path *path, partition *pi, Status *status, boolean tra
     if (__DEBUG_C__) {printf("C "); visualize_path(DEBUGFILE, path); printf("  Partition:  ");  visualize_partition(DEBUGFILE, pi); printf("  cmp: %d\n\n", cmp);}
 
     if (cmp < 0) {
-        /* New best invariant found! */
-        // printf("New CL: "); visualize_partition(DEBUGFILE, perm); printf("   partition: "); visualize_partition(DEBUGFILE, pi); ENDL();
+        /* New best invariant found! */  /* the mpi_handle_new_best_cononical_label function above should mirror this! */
         status->flag_new_cl = TRUE;
         FREEPART(status->cl);               status->cl = perm;
         FREEPART(status->cl_pi);            status->cl_pi = copy_partition(pi);
@@ -209,6 +390,7 @@ static void _process_next(graph *g, int m, int n, BadStack *stack, Status *statu
      * 
      */
     partition *new_pi = refine(g, node->pi, active, m, n);
+    status->refinement_count++; /* increment refinement variable, as we've executed a refinement */
 
     if (__DEBUG_P__) {printf("P "); visualize_path(DEBUGFILE, node->path);  printf("  pi: ");  visualize_partition(DEBUGFILE, new_pi);  printf("  active: ");  visualize_partition(DEBUGFILE, active); ENDL();}
 
@@ -474,4 +656,25 @@ static void _partition_by_scoped_degree(graph *g, partition *pi, int cell, int c
     }
 
     FREEPART(cell_sort);
+}
+
+
+static void log_output_to_file(char *filename, int refines, int auto_sz, double runtime, int num_procs) {
+    struct timespec ts;
+    // get_timespec(&ts);
+    clock_gettime(CLOCK_REALTIME, &ts);
+    char buff[100];
+    struct tm tm;
+    gmtime_r(&ts.tv_sec, &tm);
+    strftime(buff, 75, "%Y-%m-%d %H:%M:%S UTC", &tm);
+    
+    FILE *outfile; /* File Pointer for output */
+    /* output execution time to file */
+    outfile = fopen(LOGFILE, "a");
+    if (num_procs < 0) {
+        fprintf(outfile, "%s, %s, SERIAL, %d, %d, %f, 1\n", buff, filename, refines, auto_sz, runtime);
+    } else {
+        fprintf(outfile, "%s, %s, PARALLEL, %d, %d, %f, %d\n", buff, filename, refines, auto_sz, runtime, num_procs);
+    }
+    fclose(outfile);
 }

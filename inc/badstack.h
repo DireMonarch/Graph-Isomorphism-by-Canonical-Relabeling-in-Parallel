@@ -39,6 +39,8 @@ PathNode* stack_peek(BadStack *stack);
 int stack_size(BadStack *stack);
 void stack_initialize(BadStack *stack, int size);
 void visualize_stack(FILE *f, BadStack *stack);
+PathNode* stack_peek_at(BadStack *stack, int idx);
+void delete_from_bottom_of_stack(BadStack * stack, int count);
 
 #endif /* _STACK_H_ */
  
