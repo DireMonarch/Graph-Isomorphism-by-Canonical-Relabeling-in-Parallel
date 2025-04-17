@@ -15,7 +15,6 @@
  */
 
 #include "util.h"
-#include <time.h>
 
 void deepcopy(int *src, int src_sz, int *dst, int *dst_sz){
     DYNALLOC1(int, dst, *dst_sz, src_sz, "deepcopy");
@@ -42,6 +41,6 @@ double wtime() {
     return wtime;
 }
 
-void get_timespec(struct timespec *tp) {
-    clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
-}
+// void get_timespec(struct timespec *tp) {
+//     clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
+// }

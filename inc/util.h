@@ -19,6 +19,7 @@
 
 #include "proto.h"
 #include "p_util.h"
+#include <time.h>
 
 void deepcopy(int *src, int src_sz, int *dst, int *dst_sz);
 double wtime();
